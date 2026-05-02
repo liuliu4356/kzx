@@ -6,5 +6,3 @@ dashboards:
     type: file
     options:
       path: /etc/grafana/provisioning/dashboards
-    repeat_delay: 5m
-    repeat_interval: 5m
