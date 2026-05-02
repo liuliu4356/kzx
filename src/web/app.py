@@ -125,12 +125,24 @@ _OVERVIEW_PAGES = {
         "title": "麒麟系统本地部署与实战使用手册",
         "files": [_PROJ_ROOT / "docs" / "01-部署文档" / "04-麒麟系统本地部署与实战使用手册.md"],
     },
+    "physical": {
+        "title": "物理机安装指南（无 Docker 环境）",
+        "files": [_PROJ_ROOT / "docs" / "01-部署文档" / "03-物理机安装指南.md"],
+    },
     "guide": {
         "title": "小白操作手册",
         "files": [
             _PROJ_ROOT / "docs" / "02-小白文档" / "小白操作手册.md",
             _PROJ_ROOT / "小白操作手册.md",
         ],
+    },
+    "faq": {
+        "title": "常见问题解答 (FAQ)",
+        "files": [_PROJ_ROOT / "docs" / "03-FAQ文档" / "常见问题解答.md"],
+    },
+    "devguide": {
+        "title": "开发者指南",
+        "files": [_PROJ_ROOT / "docs" / "04-开发文档" / "项目开发指南.md"],
     },
     "bugs": {
         "title": "Bug修复并记录",
