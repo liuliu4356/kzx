@@ -3,46 +3,122 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{% block title %}GDB 巡检系统{% endblock %}</title>
+<title>{% block title %}三思GDB巡检平台{% endblock %}</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+
+<!-- ── Sidebar ─────────────────────────────────────── -->
 <nav class="sidebar">
-  <div class="logo">🔍 GDB 巡检</div>
-  <a href="/" class="{% if active=='home' %}active{% endif %}"><span class="icon">🏠</span> 巡检控制台</a>
-  <a href="/sites" class="{% if active=='sites' %}active{% endif %}"><span class="icon">🏢</span> 机房管理</a>
-  <a href="/queries" class="{% if active=='queries' %}active{% endif %}"><span class="icon">📊</span> 巡检指标</a>
-  <a href="/settings" class="{% if active=='settings' %}active{% endif %}"><span class="icon">⚙️</span> 系统设置</a>
-  <div class="menu-group {% if active=='reports' %}active{% endif %}">
-    <a href="/reports"><span class="icon">📋</span> 巡检报告</a>
-    <div class="submenu">
-      <a href="/reports" class="{% if active=='reports' and subtab!='settings' %}active{% endif %}">巡检报告历史</a>
-      <a href="/reports/settings" class="{% if subtab=='settings' %}active{% endif %}">巡检设置</a>
+
+  <a href="/" class="logo" style="text-decoration:none">
+    <div class="logo-icon">🔍</div>
+    <div class="logo-text">
+      三思GDB巡检
+      <span>自动化运维平台</span>
     </div>
+  </a>
+
+  <div class="nav-section" style="flex:1">
+
+    <a href="/" class="{% if active=='home' %}active{% endif %}">
+      <span class="nav-icon ni-teal">🏠</span> 巡检控制台
+    </a>
+
+    <a href="/sites" class="{% if active=='sites' %}active{% endif %}">
+      <span class="nav-icon ni-blue">🏢</span> 机房管理
+    </a>
+
+    <!-- 巡检指标 -->
+    <div class="menu-group {% if active=='queries' %}open{% endif %}">
+      <div class="menu-label" onclick="toggleMenu(this)">
+        <span class="nav-icon ni-purple">📊</span> 巡检指标 <span class="arrow">▾</span>
+      </div>
+      <div class="submenu">
+        <a href="/queries" class="{% if active=='queries' and subtab!='es' %}active{% endif %}">Prometheus指标配置</a>
+        <a href="/queries?tab=es" class="{% if active=='queries' and subtab=='es' %}active{% endif %}">ES日志查询配置</a>
+        <a href="/queries?action=import">导入配置</a>
+        <a href="/queries?action=export">导出配置</a>
+        <a href="/queries?action=template">配置模板下载</a>
+      </div>
+    </div>
+
+    <!-- 系统设置 -->
+    <div class="menu-group {% if active=='settings' %}open{% endif %}">
+      <div class="menu-label" onclick="toggleMenu(this)">
+        <span class="nav-icon ni-orange">⚙️</span> 系统设置 <span class="arrow">▾</span>
+      </div>
+      <div class="submenu">
+        <a href="/settings" class="{% if active=='settings' and (not subtab or subtab=='datasource') %}active{% endif %}">数据源连接</a>
+        <a href="/settings?tab=ai" class="{% if active=='settings' and subtab=='ai' %}active{% endif %}">AI 分析</a>
+        <a href="/settings?tab=notify" class="{% if active=='settings' and subtab=='notify' %}active{% endif %}">通知</a>
+      </div>
+    </div>
+
+    <!-- 巡检报告 -->
+    <div class="menu-group {% if active=='reports' %}open{% endif %}">
+      <div class="menu-label" onclick="toggleMenu(this)">
+        <span class="nav-icon ni-green">📋</span> 巡检报告 <span class="arrow">▾</span>
+      </div>
+      <div class="submenu">
+        <a href="/reports" class="{% if active=='reports' and subtab!='settings' %}active{% endif %}">报告历史</a>
+        <a href="/reports/settings" class="{% if active=='reports' and subtab=='settings' %}active{% endif %}">报告设置</a>
+      </div>
+    </div>
+
+    <!-- 项目总览 -->
+    <div class="menu-group {% if active=='overview' %}open{% endif %}">
+      <div class="menu-label" onclick="toggleMenu(this)">
+        <span class="nav-icon ni-cyan">📁</span> 项目总览 <span class="arrow">▾</span>
+      </div>
+      <div class="submenu">
+        <a href="/overview/address" class="{% if active=='overview' and subtab=='address' %}active{% endif %}">项目地址</a>
+        <a href="/overview/architecture" class="{% if active=='overview' and subtab=='architecture' %}active{% endif %}">项目架构</a>
+        <a href="/overview/docs" class="{% if active=='overview' and subtab=='docs' %}active{% endif %}">文档索引</a>
+        <a href="/overview/deploy" class="{% if active=='overview' and subtab=='deploy' %}active{% endif %}">部署文档</a>
+        <a href="/overview/kylin" class="{% if active=='overview' and subtab=='kylin' %}active{% endif %}">麒麟系统部署</a>
+        <a href="/overview/guide" class="{% if active=='overview' and subtab=='guide' %}active{% endif %}">小白操作手册</a>
+        <a href="/overview/bugs" class="{% if active=='overview' and subtab=='bugs' %}active{% endif %}">更新日志</a>
+      </div>
+    </div>
+
+  </div><!-- /.nav-section -->
+
+  <div class="sidebar-footer">
+    <a href="#" onclick="openModal('modal-about');return false" style="color:var(--text-muted);font-size:12.5px">
+      <span class="nav-icon ni-gray">👤</span> 关于作者
+    </a>
   </div>
-  <div style="flex:1"></div>
-  <a href="#" onclick="openModal('modal-about');return false" class="{% if active=='about' %}active{% endif %}"><span class="icon">👤</span> 关于作者</a>
+
 </nav>
+
+<!-- ── Main ────────────────────────────────────────── -->
 <main class="main">
-  {% block content %}{% endblock %}
+  <div class="page-header">
+    <div class="page-title">{% block page_title %}三思GDB巡检平台{% endblock %}</div>
+    <div class="page-subtitle">{% block page_subtitle %}{% endblock %}</div>
+  </div>
+  <div class="page-body">
+    {% block content %}{% endblock %}
+  </div>
 </main>
 
-<!-- 关于作者 Modal -->
+<!-- ── 关于作者 Modal ───────────────────────────────── -->
 <div class="modal-backdrop" id="modal-about" onclick="if(event.target===this)closeModal('modal-about')">
   <div class="modal">
     <div class="modal-title">👤 关于作者</div>
-    <div style="padding:1rem 0;line-height:1.8">
-      <p><strong>作者：</strong>三思</p>
-      <p><strong>身份：</strong>运维工程师，专注自动化巡检、监控系统建设</p>
-      <p><strong>理念：</strong>让运维更简单，让告警更精准</p>
-      <p><strong>技能：</strong>Python / Go / Prometheus / ELK / Grafana</p>
-      <hr style="margin:1rem 0;border:none;border-top:1px solid #eee">
-      <p><strong>项目介绍：</strong></p>
-      <p style="color:#666">X项目监控系统是一套面向多数据中心的自动化巡检解决方案，支持Prometheus指标监控、ES日志分析、异常检测与报告生成。</p>
-      <hr style="margin:1rem 0;border:none;border-top:1px solid #eee">
-      <p><strong>GitHub：</strong></p>
-      <p><a href="https://github.com/liuliu4356/kzx" target="_blank" style="color:#0366d6">https://github.com/liuliu4356/kzx</a></p>
-      <p style="font-size:.85rem;color:#888">欢迎Star⭐️ 和 Fork！</p>
+    <div style="line-height:1.9;color:var(--text)">
+      <p><strong style="color:var(--teal)">作者：</strong>三思</p>
+      <p><strong style="color:var(--teal)">身份：</strong>运维工程师，专注自动化巡检、监控系统建设</p>
+      <p><strong style="color:var(--teal)">理念：</strong>让运维更简单，让告警更精准</p>
+      <p><strong style="color:var(--teal)">技能：</strong>Python / Prometheus / ELK / Grafana</p>
+      <hr>
+      <p><strong style="color:var(--teal)">项目介绍：</strong></p>
+      <p style="color:var(--text-2)">三思GDB巡检平台是面向多数据中心的自动化巡检解决方案，支持Prometheus指标监控、ES日志分析、异常检测与AI报告生成。</p>
+      <hr>
+      <p><strong style="color:var(--teal)">GitHub：</strong></p>
+      <p><a href="https://github.com/liuliu4356/kzx" target="_blank" style="color:var(--teal)">https://github.com/liuliu4356/kzx</a></p>
+      <p style="font-size:12px;color:var(--text-muted)">欢迎 Star ⭐️ 和 Fork！</p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="closeModal('modal-about')">关闭</button>
@@ -53,6 +129,11 @@
 <script>
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function toggleMenu(el){
+  el.closest('.menu-group').classList.toggle('open');
+}
+
 function switchTab(group, name){
   document.querySelectorAll('[data-tab-group="'+group+'"]').forEach(el=>{
     el.classList.toggle('active', el.dataset.tab===name);
@@ -61,18 +142,21 @@ function switchTab(group, name){
     el.classList.toggle('active', el.dataset.pane===name);
   });
 }
+
 async function del(url, confirmMsg, reload){
   if(!confirm(confirmMsg)) return;
   const r = await fetch(url,{method:'DELETE'});
   if(r.ok){ if(reload) location.reload(); }
   else alert('删除失败');
 }
+
 async function postForm(url, formId, successMsg){
   const form = document.getElementById(formId);
   const r = await fetch(url,{method:'POST',body:new FormData(form)});
   if(r.ok){ alert(successMsg||'保存成功'); location.reload(); }
   else { const e=await r.json(); alert('失败: '+(e.detail||r.status)); }
 }
+
 function fillForm(formId, data){
   const form = document.getElementById(formId);
   for(const [k,v] of Object.entries(data)){

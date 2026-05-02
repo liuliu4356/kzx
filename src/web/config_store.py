@@ -134,6 +134,99 @@ def save_settings(section: str, data: dict) -> None:
     _save_raw(raw)
 
 
+# ── Datasources ────────────────────────────────────────────────────────────
+
+def list_datasources() -> list[dict]:
+    return _load_raw().get("datasources", [])
+
+
+def save_datasource(ds: dict) -> None:
+    raw = _load_raw()
+    sources: list[dict] = raw.setdefault("datasources", [])
+    for i, s in enumerate(sources):
+        if s.get("id") == ds.get("id"):
+            sources[i] = ds
+            _save_raw(raw)
+            return
+    sources.append(ds)
+    _save_raw(raw)
+
+
+def delete_datasource(ds_id: str) -> bool:
+    raw = _load_raw()
+    sources = raw.get("datasources", [])
+    before = len(sources)
+    raw["datasources"] = [s for s in sources if s.get("id") != ds_id]
+    if len(raw["datasources"]) < before:
+        _save_raw(raw)
+        return True
+    return False
+
+
+# ── LLM Models ─────────────────────────────────────────────────────────────
+
+def list_llm_models() -> list[dict]:
+    return _load_raw().get("llm", {}).get("models", [])
+
+
+def get_llm_config() -> dict:
+    return _load_raw().get("llm", {})
+
+
+def save_llm_model(model: dict) -> None:
+    raw = _load_raw()
+    llm = raw.setdefault("llm", {})
+    models: list[dict] = llm.setdefault("models", [])
+    for i, m in enumerate(models):
+        if m.get("id") == model.get("id"):
+            models[i] = model
+            _save_raw(raw)
+            return
+    models.append(model)
+    _save_raw(raw)
+
+
+def delete_llm_model(model_id: str) -> bool:
+    raw = _load_raw()
+    llm = raw.get("llm", {})
+    models = llm.get("models", [])
+    before = len(models)
+    llm["models"] = [m for m in models if m.get("id") != model_id]
+    if len(llm["models"]) < before:
+        raw["llm"] = llm
+        _save_raw(raw)
+        return True
+    return False
+
+
+def set_active_llm(model_id: str) -> None:
+    raw = _load_raw()
+    raw.setdefault("llm", {})["active_model"] = model_id
+    _save_raw(raw)
+
+
+# ── Notifiers ──────────────────────────────────────────────────────────────
+
+def get_notifier(ntype: str) -> dict:
+    for n in _load_raw().get("notifiers", []):
+        if n.get("type") == ntype:
+            return n
+    return {}
+
+
+def save_notifier(notifier: dict) -> None:
+    raw = _load_raw()
+    notifiers: list[dict] = raw.setdefault("notifiers", [])
+    ntype = notifier.get("type")
+    for i, n in enumerate(notifiers):
+        if n.get("type") == ntype:
+            notifiers[i] = notifier
+            _save_raw(raw)
+            return
+    notifiers.append(notifier)
+    _save_raw(raw)
+
+
 def save_prometheus_url(url: str, timeout_sec: int) -> None:
     raw = _load_raw()
     raw.setdefault("prometheus", {})["url"] = url

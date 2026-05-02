@@ -1,15 +1,8 @@
 {% extends "base.html" %}
-{% block title %}巡检指标{% endblock %}
+{% block title %}巡检指标 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}巡检指标配置{% endblock %}
+{% block page_subtitle %}配置 Prometheus 采集规则和 ES 日志查询规则{% endblock %}
 {% block content %}
-<h1 class="page-title">📊 巡检指标配置</h1>
-
-<div style="display:flex;justify-content:space-between;margin-bottom:1rem">
-  <div>
-    <button class="btn btn-outline" onclick="openModal('modal-export')">⬇ 导出配置</button>
-    <button class="btn btn-outline" onclick="openModal('modal-import')">⬆ 导入配置</button>
-    <button class="btn btn-outline" onclick="downloadTemplate()">📄 配置模板</button>
-  </div>
-</div>
 
 <!-- 导出Modal -->
 <div class="modal-backdrop" id="modal-export" onclick="if(event.target===this)closeModal('modal-export')">
@@ -231,6 +224,17 @@
 <script>
 const _CFG = {{ export_data_json | default('{}') | safe }};
 let importData = null;
+
+// 处理 URL 参数：?tab=es  ?action=import/export/template
+window.addEventListener('load', function(){
+  const params = new URLSearchParams(location.search);
+  const tab = params.get('tab');
+  const action = params.get('action');
+  if(tab === 'es') switchTab('q','es');
+  if(action === 'import') openModal('modal-import');
+  if(action === 'export') openModal('modal-export');
+  if(action === 'template'){ downloadTemplate(); history.replaceState({},'','/queries'); }
+});
 
 function toggleAll(type, checked){
   document.querySelectorAll('.chk-'+type).forEach(cb => cb.checked = checked);

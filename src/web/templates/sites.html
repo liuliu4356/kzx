@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}机房管理{% endblock %}
+{% block title %}机房管理 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}机房管理{% endblock %}
+{% block page_subtitle %}管理多机房数据采集配置，每个机房对应一套独立 Prometheus 实例{% endblock %}
 {% block content %}
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
-  <h1 class="page-title" style="margin:0">🏢 机房管理</h1>
+<div style="display:flex;justify-content:flex-end;margin-bottom:16px">
   <button class="btn btn-primary" onclick="openModal('modal-add')">＋ 添加机房</button>
 </div>
 
-<div class="alert alert-info">机房对应一套独立的 Prometheus 实例。巡检时所有机房并发采集，共用同一组指标配置。</div>
 
 {% if sites %}
 <div class="card">

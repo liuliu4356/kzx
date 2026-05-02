@@ -1,6 +1,97 @@
-# X 项目更新日志
+# 三思GDB巡检平台 更新日志
 
-> 自动生成，遵循语义化版本规范 (Semantic Versioning)
+> 遵循语义化版本规范 (Semantic Versioning)
+
+---
+
+## v1.4.0 (2026-05-02) - 深色主题改造 + 项目更名
+
+### 项目更名
+- ✅ **项目正式更名为「三思GDB巡检平台」**，全站标题、FastAPI 应用名、Logo 均同步更新
+
+### UI 全面深色化改造（参照现代 SaaS Dashboard 风格）
+- ✅ **style.css 完全重写** — 深色设计系统，主色调青色 `#0dd9c4`，背景 `#0d1117`，卡片 `#161f2e`
+- ✅ **侧边栏重设计** — 深海军蓝背景，每个菜单项配独立彩色图标块（青/蓝/紫/橙/绿），Logo 区域青色渐变图标
+- ✅ **系统设置菜单展开为子菜单**，含「数据源连接 / AI分析 / 通知」三个子项，与巡检指标/巡检报告风格统一
+- ✅ **巡检控制台全面升级为 Dashboard 风格**
+  - 第一行 4 张统计卡片：已配置机房 / Prometheus指标 / ES日志查询 / 历史报告
+  - 第二行 4 张统计卡片：数据源连接 / AI模型 / 知识库文件 / 系统就绪状态（动态计算）
+  - 每张卡片含彩色图标块 + 大数字 + 状态副标题
+- ✅ **全站各页面统一 page-header 区域**，含页面标题 + 副标题说明
+- ✅ **各模板新增 `page_title` / `page_subtitle` 块**，不再在 content 内重复渲染 `<h1>`
+- ✅ **表格、按钮、表单、Modal、Badge 全部暗色化**
+
+### 后端小更新
+- ✅ `page_index` 路由新增 `_kb_count`（知识库文件数）传入模板，用于仪表盘统计卡片
+- ✅ FastAPI 应用标题改为「三思GDB巡检平台」
+
+### 新配置字段
+无新增配置字段，本版本为纯 UI 改造。
+
+---
+
+## v1.3.0 (2026-05-02) - Web UI 全面升级
+
+### 菜单结构重构
+- ✅ **巡检指标** 升级为可折叠子菜单，含 Prometheus指标配置、ES日志查询配置、导入配置、导出配置、配置模板下载 5 个子项
+- ✅ **巡检报告** 保持子菜单（历史 + 设置），修复了 `active` 变量未传导致菜单高亮失效的 Bug
+- ✅ **新增「项目总览」菜单**，含 6 个子项：项目地址、项目架构、项目文档索引、项目部署文档、小白操作手册、Bug修复并记录；自动渲染对应 Markdown 文档
+
+### 系统设置升级
+- ✅ **数据源连接** — 支持多条数据源（Prometheus / Elasticsearch），表格展示，可添加/编辑/删除，支持导出/导入/配置模板下载
+- ✅ **AI 分析** — 多大模型管理（支持 Anthropic Claude、OpenAI 兼容内网接口等），可配置多个并设置默认；新增**知识库**（上传 Excel/PDF/Markdown，无大模型时自动用于日志分析）
+- ✅ **通知** — 实现完整 UI：邮件（SMTP）、企业微信（Webhook）、飞书（Webhook + 签名密钥）
+- ✅ **删除** 批处理窗口 Tab 和导入导出 Tab（功能迁移至对应子菜单）
+
+### 巡检报告优化
+- ✅ 报告历史页面移除了顶部指向巡检控制台的 Tab 链接，页面仅展示纯粹的历史报告列表
+
+### 后端新增 API
+- ✅ `GET/POST/DELETE /api/datasources` — 多数据源 CRUD
+- ✅ `GET /api/datasources/export`、`POST /api/datasources/import` — 数据源导出/导入
+- ✅ `POST/DELETE /api/llm/models` — 大模型 CRUD
+- ✅ `POST /api/llm/models/{id}/activate` — 设置默认模型
+- ✅ `POST /api/knowledge-base/upload`、`/update`、`GET .../download/{filename}`、`DELETE .../{filename}` — 知识库文件管理
+- ✅ `POST /api/notifiers` — 保存邮件/企业微信/飞书通知配置
+- ✅ `GET /overview/{page}` — 项目总览页（自动读取并渲染 Markdown 文档）
+
+### 新增配置字段（config.yaml）
+```yaml
+datasources:          # 多数据源列表（新增）
+  - id: prom-main
+    type: prometheus
+    name: 主机房-Prometheus
+    url: http://10.0.0.1:9090
+    timeout_sec: 10
+
+llm:
+  active_model: claude-main  # 默认模型（新增）
+  models:                     # 多模型列表（新增）
+    - id: claude-main
+      name: Claude Sonnet
+      provider: anthropic
+      model: claude-sonnet-4-6
+      api_key_env: ANTHROPIC_API_KEY
+    - id: internal-qwen
+      name: 内网 Qwen
+      provider: openai_compatible
+      api_base: http://10.0.0.1:8080/v1
+
+notifiers:            # 完整通知配置（扩展）
+  - type: email
+    enabled: true
+    smtp_host: smtp.example.com
+    smtp_port: 465
+    smtp_ssl: true
+    sender: noreply@example.com
+    recipients: [admin@example.com]
+  - type: wechat_work
+    enabled: false
+    webhook_url: https://qyapi.weixin.qq.com/...
+  - type: feishu
+    enabled: false
+    webhook_url: https://open.feishu.cn/...
+```
 
 ---
 
@@ -138,7 +229,7 @@ ES日志: 6种类型, 17条ERROR
 
 ---
 
-## v1.3.0 (开发中) - 计划中
+## v1.5.0 (计划中) - GoldenDB 深度集成
 
 ### 计划功能
 - [ ] GoldenDB 组件专用监控
@@ -148,8 +239,8 @@ ES日志: 6种类型, 17条ERROR
 - [ ] 表规模监控 (记录数/大小)
 - [ ] 备份进程检测 (arm_backup_mysql)
 - [ ] 多机房可视化大屏
-- [ ] 告警通知增强
-- [ ] 定时任务配置
+- [ ] 定时任务配置（Web UI 配置 cron 巡检计划）
+- [ ] 知识库检索集成（向量检索，接入巡检分析流程）
 
 ---
 
@@ -171,7 +262,10 @@ v主版本.次版本.修订号
 |------|------|------|------|
 | v1.0.0 | 2026-05-02 | 5167d36 | 初始版本 |
 | v1.1.0 | 2026-05-02 | fc8958f | 多机房支持 |
+| v1.2.0 | 2026-05-02 | —      | 功能验证与文档完善 |
+| v1.3.0 | 2026-05-02 | —      | Web UI 全面升级（多数据源/多LLM/知识库/通知UI） |
+| v1.4.0 | 2026-05-02 | —      | 深色主题改造 + 项目更名「三思GDB巡检平台」 |
 
 ---
 
-*此文件由 auto_push.py 自动更新*
+*项目：三思GDB巡检平台*

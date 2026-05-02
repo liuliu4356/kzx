@@ -1,7 +1,8 @@
 {% extends "base.html" %}
-{% block title %}巡检设置{% endblock %}
+{% block title %}巡检设置 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}巡检设置{% endblock %}
+{% block page_subtitle %}配置报告保留策略和巡检采样参数{% endblock %}
 {% block content %}
-<h1 class="page-title">⚙️ 巡检设置</h1>
 
 {% set rpt = raw.get('report',{}) %}
 {% set insp = raw.get('inspection',{}) %}

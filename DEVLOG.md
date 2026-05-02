@@ -472,6 +472,112 @@ ES  表无勾选 → 导出全部 elasticsearch.queries
 
 ---
 
+## Demo-9 · Web UI 全面升级（菜单重构 + 多数据源 + 多LLM + 知识库 + 通知UI）
+
+**日期**：2026-05-02  
+**状态**：✅ 完成
+
+### 背景
+
+原有 Web UI 菜单结构扁平、系统设置仅支持单数据源和单一 Claude 配置、通知渠道没有 UI 只能手改 yaml、巡检指标的导入/导出/模板按钮藏在页面内部难以发现。根据产品需求，对整体菜单和功能区做全面升级。
+
+### 完成内容
+
+| 文件 | 变更 | 说明 |
+|---|---|---|
+| `src/web/templates/base.html` | 侧边栏全面重构 | 巡检指标/巡检报告/项目总览均改为可折叠子菜单；`toggleMenu()` 函数控制展开收起；修复了原 `active` 变量未传导致高亮失效的 Bug |
+| `src/web/static/style.css` | 新增样式 | `.menu-label`（子菜单标题）、`.kb-list/.kb-item`（知识库文件列表）、`.notifier-section`（通知配置区块）、`.md-content`（Markdown 渲染样式）、`.ds-type-prom/.ds-type-es`（数据源类型徽章） |
+| `src/web/templates/queries.html` | URL 参数处理 | `window.addEventListener('load')` 检测 `?tab=es`/`?action=import|export|template` 并自动触发对应操作；移除页面内导入/导出/模板按钮（迁移至侧边栏） |
+| `src/web/templates/settings.html` | 完整重写 | 删除「批处理窗口」和「导入导出」Tab；数据源连接改为多条数据源表格（带类型、增删改、导入/导出/模板）；AI分析改为多模型管理+知识库；通知改为邮件/企业微信/飞书三个实际配置区 |
+| `src/web/templates/reports.html` | 精简 | 移除顶部与巡检控制台耦合的 Tab 链接，页面只展示报告历史列表 |
+| `src/web/templates/project_overview.html` | 新建 | 渲染项目各类文档；前端 JS 实现简易 Markdown→HTML 转换（无外部依赖） |
+| `src/web/config_store.py` | 新增 6 个函数 | `list/save/delete_datasource`、`list_llm_models/save_llm_model/delete_llm_model/set_active_llm`、`get_notifier/save_notifier` |
+| `src/web/app.py` | 新增路由和 API | 见下方 API 清单；所有页面路由补传 `active`/`subtab` 变量；新增知识库目录 `_KB_DIR` 管理；新增 `_list_kb_files()` |
+
+### 新增 API 清单
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/datasources` | 添加/更新数据源 |
+| DELETE | `/api/datasources/{id}` | 删除数据源 |
+| GET | `/api/datasources/export` | 导出数据源为 JSON |
+| POST | `/api/datasources/import` | 导入数据源 JSON 数组 |
+| POST | `/api/llm/models` | 添加/更新大模型配置 |
+| DELETE | `/api/llm/models/{id}` | 删除大模型 |
+| POST | `/api/llm/models/{id}/activate` | 设为默认模型 |
+| POST | `/api/knowledge-base/upload` | 上传知识库文件（支持多文件） |
+| POST | `/api/knowledge-base/update` | 替换更新知识库文件 |
+| GET | `/api/knowledge-base/download/{filename}` | 下载知识库文件 |
+| DELETE | `/api/knowledge-base/{filename}` | 删除知识库文件 |
+| POST | `/api/notifiers` | 保存通知配置（email/wechat_work/feishu） |
+| GET | `/overview/{page}` | 项目总览页（address/architecture/docs/deploy/guide/bugs） |
+
+### 知识库设计
+
+- 存储路径：`{项目根}/knowledge_base/`
+- 支持格式：`.xlsx`、`.xls`、`.pdf`、`.md`
+- 使用时机：巡检遇到日志类报错，且 `llm.active_model` 未配置或模型不可用时，自动检索知识库文档作为分析参考
+- 管理方式：Web UI 上传/下载/更新/删除，无需接触文件系统
+
+### 多数据源 vs 机房管理 的区分
+
+| 概念 | 说明 |
+|---|---|
+| 机房管理（`sites`） | 逻辑机房，绑定该机房专属的 Prometheus/ES URL，是巡检的采集单元 |
+| 数据源连接（`datasources`） | 命名连接池，独立管理所有 Prometheus 和 ES 连接，供机房引用或全局使用 |
+
+两者解耦，允许多机房共用同一个数据源，也允许独立数据源不绑定机房。
+
+### 关键设计决策
+
+- **侧边栏「导入/导出/模板」链接采用 URL 参数跳转**（`/queries?action=import`），而非在 base.html 里硬编码 JS 函数调用，避免在非 queries 页面调用未定义函数。
+- **Markdown 渲染不引入外部库**：项目 `requirements.txt` 无 `markdown` 包，前端用 20 行 JS 正则完成基础渲染，避免增加依赖；同时保留原始 `<pre>` 作为降级展示。
+- **通知 `enabled` 状态用 checkbox 控制**：不强制用户删除配置来禁用通知，方便临时关闭再重开。
+
+---
+
+## Demo-10 · 深色主题改造 + 项目更名
+
+**日期**：2026-05-02
+**状态**：✅ 完成
+
+### 背景
+
+原有 Web UI 采用浅色方案，视觉风格偏传统；参照现代 SaaS Dashboard（深色 + 彩色图标卡片）进行全面改造，同时将项目正式更名为「三思GDB巡检平台」。
+
+### 完成内容
+
+| 模块 | 变更 | 说明 |
+|---|---|---|
+| `src/web/static/style.css` | **完全重写** | 深色设计系统：`--bg-app:#0d1117` / `--bg-card:#161f2e` / 主色青色 `#0dd9c4`；覆盖全部组件（按钮/表单/表格/Badge/Modal/Log/步骤条/Tab/Markdown） |
+| `src/web/templates/base.html` | **完全重写** | 深色侧边栏 + 彩色 `nav-icon` 图标块（`.ni-teal/.ni-blue/.ni-purple/.ni-orange/.ni-green/.ni-cyan`）；Logo 区域青色渐变图标；系统设置升级为可折叠子菜单（数据源连接/AI分析/通知）；新增 `page_title`/`page_subtitle` block；Footer 关于作者保留 |
+| `src/web/templates/index.html` | **完全重写** | 8 格统计卡片仪表盘（第一行：机房/Prometheus/ES查询/报告；第二行：数据源/AI模型/知识库/系统就绪）；每格含彩色图标块 + 大数字 + 副标题；按钮状态优化（巡检中禁用+文字变更） |
+| `src/web/templates/*.html` (6个) | 移除 `<h1 class="page-title">` | 改用 `{% block page_title %}` + `{% block page_subtitle %}`，由 base.html 统一渲染页头 |
+| `src/web/app.py` | 小更新 | FastAPI 标题改为「三思GDB巡检平台」；`page_index` 注入 `_kb_count` 用于仪表盘知识库卡片 |
+
+### 设计令牌（CSS 变量）
+
+```
+--bg-app:       #0d1117   主背景
+--bg-sidebar:   #111827   侧边栏
+--bg-card:      #161f2e   卡片背景
+--bg-input:     #1e2d3d   输入框背景
+--teal:         #0dd9c4   主色（青色）
+--green:        #22c55e   成功色
+--blue:         #3b82f6   信息色
+--purple:       #a855f7   紫色
+--orange:       #f59e0b   警告色
+--red:          #ef4444   错误色
+```
+
+### 关键设计决策
+
+- **CSS 变量 + 语义化颜色类**：`sv-teal/sv-green/sv-warn/sv-ok` 等，统计卡片数值颜色由数据动态决定（无数据→橙色警告，有数据→对应主题色）
+- **系统就绪状态**：前端 JS 动态计算（机房数>0 且 Prometheus指标数>0 → 绿色「就绪」，否则橙色「待配置」），无需后端参与
+- **暗色 Modal 遮罩**：`backdrop-filter: blur(3px)`，现代感背景虚化
+
+---
+
 ## 待开发（下一步）
 
 | 优先级 | 内容 |
@@ -479,3 +585,5 @@ ES  表无勾选 → 导出全部 elasticsearch.queries
 | P2 | 表规模监控：表记录数 / 表大小 PromQL |
 | P2 | 数据字典状态检查：禁用/禁写表为 0 |
 | P3 | 历史趋势对比：与上次报告 diff，标出新增/已恢复异常 |
+| P3 | 知识库检索集成：巡检分析时自动向量检索知识库（当前仅存储，未接入检索） |
+| P3 | 定时任务配置：Web UI 配置 cron 巡检计划 |

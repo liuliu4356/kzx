@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import queue
 import threading
+import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,23 +16,19 @@ from jinja2 import Environment, FileSystemLoader
 from dotenv import load_dotenv
 import json
 
-app = FastAPI(title="GDB 巡检系统")
+app = FastAPI(title="三思GDB巡检平台")
 
 _WEB_DIR = Path(__file__).parent
 _PROJ_ROOT = _WEB_DIR.parent.parent
+_KB_DIR = _PROJ_ROOT / "knowledge_base"
 
 app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
-
-# Use direct Jinja2 to avoid Starlette template caching issue
-from jinja2 import Environment, FileSystemLoader
 
 jinja_env = Environment(loader=FileSystemLoader(str(_WEB_DIR / "templates")))
 
 def render_template(name: str, context: dict) -> HTMLResponse:
     template = jinja_env.get_template(name)
     return HTMLResponse(template.render(**context))
-
-templates = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
 
 
 # ── 页面路由 ───────────────────────────────────────────────────────────────
@@ -40,13 +37,15 @@ templates = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
 async def page_index(request: Request):
     raw = cs.get_all()
     reports = _list_reports()[:10]
-    return render_template("index.html", {"raw": raw, "reports": reports})
+    kb_count = len(_list_kb_files()) if _KB_DIR.exists() else 0
+    raw["_kb_count"] = kb_count
+    return render_template("index.html", {"raw": raw, "reports": reports, "active": "home"})
 
 
 @app.get("/sites", response_class=HTMLResponse)
 async def page_sites(request: Request):
     sites = cs.list_sites()
-    return render_template("sites.html", {"sites": sites})
+    return render_template("sites.html", {"sites": sites, "active": "sites"})
 
 
 @app.get("/queries", response_class=HTMLResponse)
@@ -60,29 +59,118 @@ async def page_queries(request: Request):
         "elasticsearch": raw.get("elasticsearch", {}),
         "sites": sites,
     }, ensure_ascii=False)
+    tab = request.query_params.get("tab", "")
+    subtab = "es" if tab == "es" else ""
     return render_template("queries.html", {
         "prom_queries": prom_queries,
         "es_queries": es_queries,
         "export_data_json": export_data,
+        "active": "queries",
+        "subtab": subtab,
     })
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def page_settings(request: Request):
     raw = cs.get_all()
-    return render_template("settings.html", {"raw": raw})
+    kb_files = _list_kb_files()
+    return render_template("settings.html", {"raw": raw, "kb_files": kb_files, "active": "settings"})
 
 
 @app.get("/reports", response_class=HTMLResponse)
 async def page_reports(request: Request):
     reports = _list_reports()
-    return render_template("reports.html", {"reports": reports, "subtab": request.query_params.get("subtab", "")})
+    return render_template("reports.html", {"reports": reports, "active": "reports", "subtab": ""})
 
 
 @app.get("/reports/settings", response_class=HTMLResponse)
 async def page_reports_settings(request: Request):
     raw = cs.get_all()
-    return render_template("reports_settings.html", {"raw": raw, "subtab": "settings"})
+    return render_template("reports_settings.html", {"raw": raw, "active": "reports", "subtab": "settings"})
+
+
+# ── 项目总览路由 ───────────────────────────────────────────────────────────
+
+_OVERVIEW_PAGES = {
+    "address": {
+        "title": "项目地址",
+        "files": [_PROJ_ROOT / "README.md"],
+        "extra_links": [
+            {"url": "https://github.com/liuliu4356/kzx", "label": "GitHub 仓库", "desc": "源代码托管", "external": True},
+        ],
+    },
+    "architecture": {
+        "title": "项目架构",
+        "files": [_PROJ_ROOT / "docs" / "X项目监控系统产品手册.md", _PROJ_ROOT / "README.md"],
+        "section_hint": "architecture",
+    },
+    "docs": {
+        "title": "项目文档索引",
+        "files": [_PROJ_ROOT / "docs" / "00-文档索引" / "README.md"],
+        "extra_links": [
+            {"url": "/overview/deploy", "label": "项目部署文档", "desc": "生产/测试环境部署", "external": False},
+            {"url": "/overview/guide", "label": "小白操作手册", "desc": "零基础快速入门", "external": False},
+            {"url": "/overview/bugs", "label": "Bug修复记录", "desc": "版本更新日志", "external": False},
+        ],
+    },
+    "deploy": {
+        "title": "项目部署文档",
+        "files": [
+            _PROJ_ROOT / "docs" / "01-部署文档" / "01-生产环境部署指南.md",
+            _PROJ_ROOT / "docs" / "01-部署文档" / "02-测试环境搭建指南.md",
+            _PROJ_ROOT / "测试环境搭建指南.md",
+        ],
+    },
+    "kylin": {
+        "title": "麒麟系统本地部署与实战使用手册",
+        "files": [_PROJ_ROOT / "docs" / "01-部署文档" / "04-麒麟系统本地部署与实战使用手册.md"],
+    },
+    "guide": {
+        "title": "小白操作手册",
+        "files": [
+            _PROJ_ROOT / "docs" / "02-小白文档" / "小白操作手册.md",
+            _PROJ_ROOT / "小白操作手册.md",
+        ],
+    },
+    "bugs": {
+        "title": "Bug修复并记录",
+        "files": [_PROJ_ROOT / "CHANGELOG.md", _PROJ_ROOT / "DEVLOG.md"],
+    },
+}
+
+
+@app.get("/overview", response_class=HTMLResponse)
+async def page_overview_root():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/overview/address")
+
+
+@app.get("/overview/{page}", response_class=HTMLResponse)
+async def page_overview(page: str):
+    cfg = _OVERVIEW_PAGES.get(page)
+    if not cfg:
+        raise HTTPException(404, "页面不存在")
+    content_raw = ""
+    for fp in cfg.get("files", []):
+        if fp.exists():
+            try:
+                content_raw = fp.read_text(encoding="utf-8")
+            except Exception:
+                try:
+                    content_raw = fp.read_text(encoding="gbk")
+                except Exception:
+                    pass
+            if content_raw:
+                break
+    return render_template("project_overview.html", {
+        "page_title": cfg["title"],
+        "content_raw": content_raw,
+        "content_html": "",
+        "extra_links": cfg.get("extra_links", []),
+        "empty_msg": "文档文件不存在或无法读取",
+        "active": "overview",
+        "subtab": page,
+    })
 
 
 # ── API: Sites ─────────────────────────────────────────────────────────────
@@ -164,7 +252,7 @@ async def api_delete_es(name: str):
     return JSONResponse({"ok": True})
 
 
-# ── API: Import/Export ───────────────────────────────────────────────────────
+# ── API: Import/Export ────────────────────────────────────────────────────
 
 @app.get("/api/config/export")
 async def api_export():
@@ -193,6 +281,167 @@ async def api_import(request: Request):
     return JSONResponse({"ok": True})
 
 
+# ── API: Datasources ───────────────────────────────────────────────────────
+
+@app.post("/api/datasources")
+async def api_save_datasource(
+    id: str = Form(...),
+    name: str = Form(...),
+    type: str = Form(...),
+    url: str = Form(...),
+    timeout_sec: int = Form(10),
+    username_env: str = Form(""),
+    password_env: str = Form(""),
+):
+    ds: dict = {"id": id, "name": name, "type": type, "url": url, "timeout_sec": timeout_sec}
+    if type == "elasticsearch":
+        ds["username_env"] = username_env
+        ds["password_env"] = password_env
+    cs.save_datasource(ds)
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/datasources/{ds_id}")
+async def api_delete_datasource(ds_id: str):
+    ok = cs.delete_datasource(ds_id)
+    if not ok:
+        raise HTTPException(404, "数据源不存在")
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/datasources/export")
+async def api_export_datasources():
+    return JSONResponse(cs.list_datasources())
+
+
+@app.post("/api/datasources/import")
+async def api_import_datasources(request: Request):
+    data = await request.json()
+    if not isinstance(data, list):
+        raise HTTPException(400, "期望 JSON 数组格式")
+    raw = cs._load_raw()
+    raw["datasources"] = data
+    cs._save_raw(raw)
+    return JSONResponse({"ok": True})
+
+
+# ── API: LLM Models ────────────────────────────────────────────────────────
+
+@app.post("/api/llm/models")
+async def api_save_llm_model(
+    id: str = Form(...),
+    name: str = Form(...),
+    provider: str = Form("anthropic"),
+    model: str = Form(...),
+    api_key_env: str = Form(""),
+    api_base: str = Form(""),
+    max_tokens: int = Form(2048),
+):
+    cs.save_llm_model({
+        "id": id, "name": name, "provider": provider, "model": model,
+        "api_key_env": api_key_env, "api_base": api_base or "",
+        "max_tokens": max_tokens,
+    })
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/llm/models/{model_id}")
+async def api_delete_llm_model(model_id: str):
+    ok = cs.delete_llm_model(model_id)
+    if not ok:
+        raise HTTPException(404, "模型不存在")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/llm/models/{model_id}/activate")
+async def api_activate_llm(model_id: str):
+    cs.set_active_llm(model_id)
+    return JSONResponse({"ok": True})
+
+
+# ── API: Knowledge Base ────────────────────────────────────────────────────
+
+@app.post("/api/knowledge-base/upload")
+async def api_kb_upload(files: list[UploadFile] = File(...)):
+    _KB_DIR.mkdir(parents=True, exist_ok=True)
+    saved = []
+    for f in files:
+        suffix = Path(f.filename).suffix.lower()
+        if suffix not in (".xlsx", ".xls", ".pdf", ".md"):
+            raise HTTPException(400, f"不支持的文件格式: {suffix}")
+        dest = _KB_DIR / f.filename
+        content = await f.read()
+        dest.write_bytes(content)
+        saved.append(f.filename)
+    return JSONResponse({"ok": True, "saved": saved})
+
+
+@app.post("/api/knowledge-base/update")
+async def api_kb_update(file: UploadFile = File(...), replace: str = Form("")):
+    _KB_DIR.mkdir(parents=True, exist_ok=True)
+    target_name = replace if replace else file.filename
+    dest = _KB_DIR / target_name
+    content = await file.read()
+    dest.write_bytes(content)
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/knowledge-base/download/{filename}")
+async def api_kb_download(filename: str):
+    path = _KB_DIR / filename
+    if not path.exists():
+        raise HTTPException(404, "文件不存在")
+    return FileResponse(str(path), filename=filename)
+
+
+@app.delete("/api/knowledge-base/{filename}")
+async def api_kb_delete(filename: str):
+    path = _KB_DIR / filename
+    if not path.exists():
+        raise HTTPException(404, "文件不存在")
+    path.unlink()
+    return JSONResponse({"ok": True})
+
+
+# ── API: Notifiers ─────────────────────────────────────────────────────────
+
+@app.post("/api/notifiers")
+async def api_save_notifier(request: Request):
+    fd = await request.form()
+    ntype = fd.get("type", "")
+    enabled = fd.get("enabled", "false") == "true"
+    notifier: dict = {"type": ntype, "enabled": enabled}
+
+    if ntype == "email":
+        recipients_raw = fd.get("recipients", "")
+        recipients = [r.strip() for r in recipients_raw.split(",") if r.strip()]
+        notifier.update({
+            "smtp_host": fd.get("smtp_host", ""),
+            "smtp_port": int(fd.get("smtp_port", 465)),
+            "smtp_ssl": "smtp_ssl" in fd,
+            "sender": fd.get("sender", ""),
+            "sender_name": fd.get("sender_name", "GDB巡检系统"),
+            "recipients": recipients,
+            "username_env": fd.get("username_env", ""),
+            "password_env": fd.get("password_env", ""),
+        })
+    elif ntype == "wechat_work":
+        mentioned_raw = fd.get("mentioned_list", "")
+        mentioned = [m.strip() for m in mentioned_raw.split(",") if m.strip()]
+        notifier.update({
+            "webhook_url": fd.get("webhook_url", ""),
+            "mentioned_list": mentioned,
+        })
+    elif ntype == "feishu":
+        notifier.update({
+            "webhook_url": fd.get("webhook_url", ""),
+            "secret_env": fd.get("secret_env", ""),
+        })
+
+    cs.save_notifier(notifier)
+    return JSONResponse({"ok": True})
+
+
 # ── API: Settings ──────────────────────────────────────────────────────────
 
 @app.post("/api/settings/prometheus")
@@ -213,21 +462,6 @@ async def api_es_settings(
     kibana_url: str = Form(""),
 ):
     cs.save_es_url(url, username_env, password_env, timeout_sec, kibana_url)
-    return JSONResponse({"ok": True})
-
-
-@app.post("/api/settings/llm")
-async def api_llm_settings(
-    model: str = Form(...),
-    api_key_env: str = Form("ANTHROPIC_API_KEY"),
-    max_tokens: int = Form(2048),
-    enable_prompt_caching: str = Form("true"),
-):
-    cs.save_settings("llm", {
-        "provider": "anthropic", "model": model,
-        "api_key_env": api_key_env, "max_tokens": max_tokens,
-        "enable_prompt_caching": enable_prompt_caching.lower() == "true",
-    })
     return JSONResponse({"ok": True})
 
 
@@ -330,7 +564,6 @@ async def api_inspect(
             emit("⏳ 加载配置...")
             cfg = load_config("config.yaml")
 
-            # 解析时间段
             mode = "instant"
             period_start = period_end = None
             if start and end:
@@ -362,7 +595,7 @@ async def api_inspect(
                 emit("⏭️ 跳过 AI 分析")
                 ai_analysis = "_已跳过 AI 分析。_"
             else:
-                emit("🤖 AI 分析中（Claude）...")
+                emit("🤖 AI 分析中...")
                 ai_analysis = analyze(site_results, cfg.llm, batch_win,
                                       period_start, period_end)
                 emit("  ✅ AI 分析完成")
@@ -374,7 +607,7 @@ async def api_inspect(
         except Exception as exc:
             q.put(f"data: ERROR:{exc}\n\n")
         finally:
-            q.put(None)  # sentinel
+            q.put(None)
 
     q: queue.Queue = queue.Queue()
     threading.Thread(target=_run, args=(q,), daemon=True).start()
@@ -410,9 +643,8 @@ async def view_report(filename: str):
 @app.get("/reports/download/{filename}")
 async def download_report(filename: str):
     path = _PROJ_ROOT / "reports" / filename
-    debug_info = f"filename={filename}, path={path}, exists={path.exists()}"
     if not path.exists():
-        return JSONResponse({"error": debug_info}, status_code=404)
+        return JSONResponse({"error": f"not found: {path}"}, status_code=404)
     media_type = "text/html" if filename.endswith(".html") else "text/markdown"
     resp = FileResponse(str(path), media_type=media_type)
     resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -427,6 +659,8 @@ async def delete_report(filename: str):
     path.unlink()
     return JSONResponse({"ok": True})
 
+
+# ── 内部辅助 ───────────────────────────────────────────────────────────────
 
 def _list_reports() -> list[dict]:
     try:
@@ -455,3 +689,16 @@ def _clean_old_reports(days: int = 7):
     for f in reports_dir.iterdir():
         if f.suffix in (".html", ".md") and f.stat().st_mtime < cutoff:
             f.unlink()
+
+
+def _list_kb_files() -> list[dict]:
+    if not _KB_DIR.exists():
+        return []
+    files = sorted(
+        [f for f in _KB_DIR.iterdir() if f.suffix.lower() in (".xlsx", ".xls", ".pdf", ".md")],
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,
+    )
+    return [{"name": f.name, "size_kb": round(f.stat().st_size / 1024, 1),
+             "mtime": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")}
+            for f in files]

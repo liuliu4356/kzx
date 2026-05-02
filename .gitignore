@@ -19,7 +19,11 @@ config.yaml
 
 # 报告
 reports/*.md
+reports/*.html
 !reports/.gitkeep
+
+# 备份文件
+*.bak
 
 # Docker 数据 (不提交到 Git)
 es-data/

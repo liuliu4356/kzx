@@ -1,148 +1,470 @@
 {% extends "base.html" %}
-{% block title %}系统设置{% endblock %}
+{% block title %}系统设置 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}系统设置{% endblock %}
+{% block page_subtitle %}配置数据源连接、AI 分析模型和通知渠道{% endblock %}
 {% block content %}
-<h1 class="page-title">⚙️ 系统设置</h1>
 
 <div class="tabs">
   <div class="tab active" data-tab-group="s" data-tab="conn" onclick="switchTab('s','conn')">数据源连接</div>
   <div class="tab" data-tab-group="s" data-tab="llm" onclick="switchTab('s','llm')">AI 分析</div>
   <div class="tab" data-tab-group="s" data-tab="notify" onclick="switchTab('s','notify')">通知</div>
-  <div class="tab" data-tab-group="s" data-tab="batch" onclick="switchTab('s','batch')">批处理窗口</div>
-  <div class="tab" data-tab-group="s" data-tab="imex" onclick="switchTab('s','imex')">导入导出</div>
 </div>
 
-{% set prom = raw.get('prometheus',{}) %}
-{% set es   = raw.get('elasticsearch',{}) %}
-{% set llm  = raw.get('llm',{}) %}
-{% set rpt  = raw.get('report',{}) %}
-{% set insp = raw.get('inspection',{}) %}
-{% set nots = raw.get('notifiers',[]) %}
-{% set bws  = raw.get('batch_windows',[]) %}
+{% set datasources = raw.get('datasources', []) %}
+{% set llm = raw.get('llm', {}) %}
+{% set llm_models = llm.get('models', []) %}
+{% set active_llm = llm.get('active_model', '') %}
+{% set notifiers_list = raw.get('notifiers', []) %}
+{% set notifiers = {} %}
+{% for n in notifiers_list %}{% set _ = notifiers.update({n.get('type',''): n}) %}{% endfor %}
 
-<!-- 数据源连接 -->
+<!-- ===== 数据源连接 ===== -->
 <div class="tab-pane active" data-pane-group="s" data-pane="conn">
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">Prometheus</div>
-      <form id="form-prom-url">
-        <div class="form-group">
-          <label>全局 Prometheus 地址</label>
-          <input name="url" value="{{ prom.get('url','http://localhost:9090') }}" required>
-        </div>
-        <div class="form-group">
-          <label>超时（秒）</label>
-          <input name="timeout_sec" type="number" value="{{ prom.get('timeout_sec',10) }}">
-        </div>
-        <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/prometheus','form-prom-url')">保存</button>
-      </form>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+    <span style="font-weight:600;font-size:.9375rem">已配置数据源（{{ datasources|length }} 个）</span>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-outline btn-sm" onclick="exportDatasources()">⬇ 导出</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('ds-import-file').click()">⬆ 导入</button>
+      <input type="file" id="ds-import-file" accept=".json" style="display:none" onchange="importDatasources(this)">
+      <button class="btn btn-outline btn-sm" onclick="downloadDsTemplate()">📄 模板</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-ds')">＋ 添加数据源</button>
     </div>
-    <div class="card">
-      <div class="card-title">Elasticsearch</div>
-      <form id="form-es-url">
-        <div class="form-group">
-          <label>ES 地址</label>
-          <input name="url" value="{{ es.get('url','http://localhost:9200') }}" required>
+  </div>
+
+  {% if datasources %}
+  <div class="card" style="padding:0;overflow:hidden">
+    <table>
+      <thead><tr>
+        <th>名称</th><th>类型</th><th>地址</th><th>超时</th><th>操作</th>
+      </tr></thead>
+      <tbody>
+      {% for ds in datasources %}
+      <tr>
+        <td><strong>{{ ds.name }}</strong></td>
+        <td>
+          {% if ds.type == 'prometheus' %}
+          <span class="badge ds-type-prom">Prometheus</span>
+          {% else %}
+          <span class="badge ds-type-es">Elasticsearch</span>
+          {% endif %}
+        </td>
+        <td><code class="truncate">{{ ds.url }}</code></td>
+        <td class="text-muted">{{ ds.get('timeout_sec', 10) }}s</td>
+        <td class="actions">
+          <button class="btn btn-outline btn-sm" onclick='editDs({{ ds | tojson }})'>编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="del('/api/datasources/{{ ds.id }}','删除数据源「{{ ds.name }}」？',true)">删除</button>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card empty">
+    <div class="empty-icon">🔌</div>
+    <p>还没有配置数据源。<br><span class="text-muted">点击「添加数据源」开始配置。</span></p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ===== AI 分析 ===== -->
+<div class="tab-pane" data-pane-group="s" data-pane="llm">
+
+  <!-- 大模型配置 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+    <span style="font-weight:600;font-size:.9375rem">大模型配置（{{ llm_models|length }} 个）</span>
+    <button class="btn btn-primary btn-sm" onclick="openModal('modal-llm')">＋ 添加大模型</button>
+  </div>
+
+  {% if llm_models %}
+  <div class="card" style="padding:0;overflow:hidden;margin-bottom:1.25rem">
+    <table>
+      <thead><tr>
+        <th>名称</th><th>提供商</th><th>模型</th><th>API Base</th><th>状态</th><th>操作</th>
+      </tr></thead>
+      <tbody>
+      {% for m in llm_models %}
+      <tr>
+        <td><strong>{{ m.name }}</strong></td>
+        <td class="text-muted">{{ m.get('provider','anthropic') }}</td>
+        <td><code>{{ m.get('model','') }}</code></td>
+        <td class="text-muted truncate">{{ m.get('api_base','') or '默认' }}</td>
+        <td>
+          {% if m.id == active_llm %}
+          <span class="badge badge-active">当前使用</span>
+          {% else %}
+          <button class="btn btn-outline btn-sm" onclick="setActiveLlm('{{ m.id }}')">设为默认</button>
+          {% endif %}
+        </td>
+        <td class="actions">
+          <button class="btn btn-outline btn-sm" onclick='editLlm({{ m | tojson }})'>编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="del('/api/llm/models/{{ m.id }}','删除模型「{{ m.name }}」？',true)">删除</button>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card empty" style="margin-bottom:1.25rem">
+    <div class="empty-icon">🤖</div>
+    <p>还没有配置大模型。<br><span class="text-muted">如未配置大模型，巡检时将自动使用知识库文档进行分析。</span></p>
+  </div>
+  {% endif %}
+
+  <!-- 知识库 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+    <span style="font-weight:600;font-size:.9375rem">知识库文档</span>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('kb-upload-input').click()">⬆ 上传文档</button>
+      <input type="file" id="kb-upload-input" accept=".xlsx,.xls,.pdf,.md" multiple style="display:none" onchange="uploadKb(this)">
+    </div>
+  </div>
+  <div class="alert alert-info" style="margin-bottom:.75rem">
+    支持格式：<strong>Excel (.xlsx/.xls)</strong>、<strong>PDF (.pdf)</strong>、<strong>Markdown (.md)</strong>。
+    巡检遇到日志类报错时，若未配置大模型则自动检索知识库。
+  </div>
+
+  {% if kb_files %}
+  <div class="kb-list">
+    {% for f in kb_files %}
+    <div class="kb-item">
+      <div class="kb-icon">
+        {% if f.name.endswith('.pdf') %}📕
+        {% elif f.name.endswith('.md') %}📝
+        {% else %}📊{% endif %}
+      </div>
+      <div class="kb-info">
+        <div class="kb-name">{{ f.name }}</div>
+        <div class="kb-meta">{{ f.size_kb }} KB · {{ f.mtime }}</div>
+      </div>
+      <div class="kb-actions">
+        <a class="btn btn-outline btn-sm" href="/api/knowledge-base/download/{{ f.name }}">下载</a>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('kb-update-{{ loop.index }}').click()">更新</button>
+        <input type="file" id="kb-update-{{ loop.index }}" accept=".xlsx,.xls,.pdf,.md" style="display:none" onchange="updateKb(this,'{{ f.name }}')">
+        <button class="btn btn-danger btn-sm" onclick="del('/api/knowledge-base/{{ f.name }}','确定删除知识库文档「{{ f.name }}」？',true)">删除</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty">
+    <div class="empty-icon">📚</div>
+    <p>知识库为空。<br><span class="text-muted">上传 Excel/PDF/Markdown 文档后可在巡检中作为 AI 分析参考。</span></p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ===== 通知 ===== -->
+<div class="tab-pane" data-pane-group="s" data-pane="notify">
+  {% set email = notifiers.get('email', {}) %}
+  {% set wechat = notifiers.get('wechat_work', {}) %}
+  {% set feishu = notifiers.get('feishu', {}) %}
+
+  <!-- 邮件通知 -->
+  <div class="notifier-section">
+    <div class="notifier-header">
+      📧 邮件通知
+      <label style="margin-left:auto;font-weight:400;font-size:.875rem">
+        <input type="checkbox" id="email-enabled" {% if email.get('enabled') %}checked{% endif %}> 启用
+      </label>
+    </div>
+    <div class="notifier-body">
+      <form id="form-email">
+        <div class="form-row">
+          <div class="form-group">
+            <label>SMTP 服务器</label>
+            <input name="smtp_host" value="{{ email.get('smtp_host','') }}" placeholder="smtp.example.com">
+          </div>
+          <div class="form-group">
+            <label>端口</label>
+            <input name="smtp_port" type="number" value="{{ email.get('smtp_port', 465) }}">
+          </div>
         </div>
         <div class="form-row">
           <div class="form-group">
             <label>用户名环境变量</label>
-            <input name="username_env" value="{{ es.get('username_env','') }}">
+            <input name="username_env" value="{{ email.get('username_env','SMTP_USER') }}" placeholder="SMTP_USER">
           </div>
           <div class="form-group">
             <label>密码环境变量</label>
-            <input name="password_env" value="{{ es.get('password_env','') }}">
+            <input name="password_env" value="{{ email.get('password_env','SMTP_PASS') }}" placeholder="SMTP_PASS">
           </div>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/elasticsearch','form-es-url')">保存</button>
+        <div class="form-row">
+          <div class="form-group">
+            <label>发件人地址</label>
+            <input name="sender" value="{{ email.get('sender','') }}" placeholder="noreply@example.com">
+          </div>
+          <div class="form-group">
+            <label>发件人名称</label>
+            <input name="sender_name" value="{{ email.get('sender_name','GDB巡检系统') }}">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>收件人（逗号分隔）</label>
+          <input name="recipients" value="{{ email.get('recipients',[])|join(',') }}" placeholder="admin@example.com,ops@example.com">
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:.4rem">
+            <input type="checkbox" name="smtp_ssl" {% if email.get('smtp_ssl', True) %}checked{% endif %}> 启用 SSL/TLS
+          </label>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('email','form-email')">保存</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 企业微信 -->
+  <div class="notifier-section">
+    <div class="notifier-header">
+      💬 企业微信通知
+      <label style="margin-left:auto;font-weight:400;font-size:.875rem">
+        <input type="checkbox" id="wechat-enabled" {% if wechat.get('enabled') %}checked{% endif %}> 启用
+      </label>
+    </div>
+    <div class="notifier-body">
+      <form id="form-wechat">
+        <div class="form-group">
+          <label>Webhook URL</label>
+          <input name="webhook_url" value="{{ wechat.get('webhook_url','') }}"
+            placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxx">
+        </div>
+        <div class="form-group">
+          <label>@成员（userid，逗号分隔，留空则@所有人）</label>
+          <input name="mentioned_list" value="{{ wechat.get('mentioned_list',[])|join(',') }}" placeholder="zhangsan,lisi">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('wechat_work','form-wechat')">保存</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 飞书 -->
+  <div class="notifier-section">
+    <div class="notifier-header">
+      🚀 飞书通知
+      <label style="margin-left:auto;font-weight:400;font-size:.875rem">
+        <input type="checkbox" id="feishu-enabled" {% if feishu.get('enabled') %}checked{% endif %}> 启用
+      </label>
+    </div>
+    <div class="notifier-body">
+      <form id="form-feishu">
+        <div class="form-group">
+          <label>Webhook URL</label>
+          <input name="webhook_url" value="{{ feishu.get('webhook_url','') }}"
+            placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx">
+        </div>
+        <div class="form-group">
+          <label>签名密钥（可选）</label>
+          <input name="secret_env" value="{{ feishu.get('secret_env','') }}" placeholder="FEISHU_SECRET（环境变量名）">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('feishu','form-feishu')">保存</button>
       </form>
     </div>
   </div>
 </div>
 
-<!-- AI 分析 -->
-<div class="tab-pane" data-pane-group="s" data-pane="llm">
-  <div class="card">
-    <div class="card-title">Claude AI 配置</div>
-    <form id="form-llm">
-      <div class="form-group">
-        <label>模型</label>
-        <select name="model">
-          <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
-        </select>
+<!-- Modal: 添加/编辑数据源 -->
+<div class="modal-backdrop" id="modal-ds" onclick="if(event.target===this)closeModal('modal-ds')">
+  <div class="modal">
+    <div class="modal-title" id="ds-modal-title">添加数据源</div>
+    <form id="form-ds">
+      <input type="hidden" name="id" id="ds-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>数据源名称 <span style="color:red">*</span></label>
+          <input name="name" required placeholder="如：主机房-Prometheus">
+        </div>
+        <div class="form-group">
+          <label>类型 <span style="color:red">*</span></label>
+          <select name="type" id="ds-type-select" onchange="toggleDsFields()">
+            <option value="prometheus">Prometheus</option>
+            <option value="elasticsearch">Elasticsearch</option>
+          </select>
+        </div>
       </div>
       <div class="form-group">
-        <label>API Key 环境变量</label>
-        <input name="api_key_env" value="{{ llm.get('api_key_env','ANTHROPIC_API_KEY') }}">
+        <label>地址 <span style="color:red">*</span></label>
+        <input name="url" required placeholder="http://10.0.0.1:9090">
       </div>
-      <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/llm','form-llm')">保存</button>
+      <div class="form-group">
+        <label>超时（秒）</label>
+        <input name="timeout_sec" type="number" value="10">
+      </div>
+      <!-- ES-only fields -->
+      <div id="ds-es-fields" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>用户名环境变量</label>
+            <input name="username_env" placeholder="ES_USER">
+          </div>
+          <div class="form-group">
+            <label>密码环境变量</label>
+            <input name="password_env" placeholder="ES_PASS">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-ds')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveDatasource()">保存</button>
+      </div>
     </form>
   </div>
 </div>
 
-<!-- 通知 -->
-<div class="tab-pane" data-pane-group="s" data-pane="notify">
-  <div class="card">
-    <div class="card-title">通知渠道</div>
-    <p class="text-muted">请编辑 config.yaml 配置 notifiers</p>
+<!-- Modal: 添加/编辑大模型 -->
+<div class="modal-backdrop" id="modal-llm" onclick="if(event.target===this)closeModal('modal-llm')">
+  <div class="modal">
+    <div class="modal-title" id="llm-modal-title">添加大模型</div>
+    <form id="form-llm">
+      <input type="hidden" name="id" id="llm-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>显示名称 <span style="color:red">*</span></label>
+          <input name="name" required placeholder="如：Claude Sonnet、内网Qwen">
+        </div>
+        <div class="form-group">
+          <label>提供商</label>
+          <select name="provider">
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="openai_compatible">OpenAI 兼容接口（内网/其他）</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>模型名称 <span style="color:red">*</span></label>
+        <input name="model" required placeholder="如：claude-sonnet-4-6、qwen-72b">
+      </div>
+      <div class="form-group">
+        <label>API Key 环境变量</label>
+        <input name="api_key_env" placeholder="ANTHROPIC_API_KEY">
+      </div>
+      <div class="form-group">
+        <label>API Base URL（内网模型填写，公有云留空）</label>
+        <input name="api_base" placeholder="http://10.0.0.1:8080/v1">
+        <div class="form-hint">OpenAI 兼容接口的基础地址，Anthropic 官方模型无需填写</div>
+      </div>
+      <div class="form-group">
+        <label>最大 Token 数</label>
+        <input name="max_tokens" type="number" value="2048">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-llm')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveLlmModel()">保存</button>
+      </div>
+    </form>
   </div>
 </div>
 
-<!-- 批处理窗口 -->
-<div class="tab-pane" data-pane-group="s" data-pane="batch">
-  <div class="card">
-    <div class="card-title">批处理窗口</div>
-    <p class="text-muted">请编辑 config.yaml 配置 batch_windows</p>
-  </div>
-</div>
+{% endblock %}
 
-<!-- 导入导出 -->
-<div class="tab-pane" data-pane-group="s" data-pane="imex">
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">导出配置</div>
-      <div class="form-group">
-        <label><input type="checkbox" id="exp-prom" checked> Prometheus</label>
-      </div>
-      <div class="form-group">
-        <label><input type="checkbox" id="exp-es" checked> Elasticsearch</label>
-      </div>
-      <div class="form-group">
-        <label><input type="checkbox" id="exp-dc" checked> 机房</label>
-      </div>
-      <button type="button" class="btn btn-primary btn-sm" onclick="doExport()">导出</button>
-    </div>
-    <div class="card">
-      <div class="card-title">导入配置</div>
-      <div class="form-group">
-        <label>JSON 数据</label>
-        <textarea id="imp-data" style="width:100%;height:120px;border:1px solid #ccc"></textarea>
-      </div>
-      <button type="button" class="btn btn-success btn-sm" onclick="doImport()">导入</button>
-    </div>
-  </div>
-</div>
-
+{% block scripts %}
 <script>
-function doExport() {
-  var btn = event.target;
-  btn.disabled = true;
-  btn.textContent = '导出中...';
-  fetch('/api/config/export').then(r=>{
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    return r.text();
-  }).then(text=>{
-    var blob = new Blob([text], {type: 'application/json'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'config.json';
-    a.click();
-    btn.disabled = false;
-    btn.textContent = '导出';
-  }).catch(e=>{
-    alert('导出失败: '+e);
-    btn.disabled = false;
-    btn.textContent = '导出';
+// ── 数据源 ──────────────────────────────────────────────────────────────────
+function toggleDsFields(){
+  const t = document.getElementById('ds-type-select').value;
+  document.getElementById('ds-es-fields').style.display = t === 'elasticsearch' ? '' : 'none';
+}
+function editDs(ds){
+  document.getElementById('ds-modal-title').textContent = '编辑数据源：' + ds.name;
+  fillForm('form-ds', ds);
+  document.getElementById('ds-id').value = ds.id || '';
+  document.getElementById('ds-type-select').value = ds.type || 'prometheus';
+  toggleDsFields();
+  openModal('modal-ds');
+}
+async function saveDatasource(){
+  const form = document.getElementById('form-ds');
+  const fd = new FormData(form);
+  if(!fd.get('id')) fd.set('id', 'ds_' + Date.now());
+  const r = await fetch('/api/datasources', {method:'POST', body: fd});
+  if(r.ok){ alert('数据源已保存'); closeModal('modal-ds'); location.reload(); }
+  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
+}
+function exportDatasources(){
+  fetch('/api/datasources/export').then(r=>r.json()).then(data=>{
+    _downloadJSON(data, '数据源配置_' + new Date().toISOString().slice(0,10) + '.json');
   });
+}
+function importDatasources(input){
+  const file = input.files[0];
+  if(!file) return;
+  file.text().then(text=>{
+    try{
+      const data = JSON.parse(text);
+      fetch('/api/datasources/import', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)
+      }).then(r=>{ if(r.ok){ alert('导入成功'); location.reload(); } else alert('导入失败'); });
+    }catch(e){ alert('文件格式错误'); }
+  });
+  input.value = '';
+}
+function downloadDsTemplate(){
+  _downloadJSON([
+    {id:"prom-main", name:"主机房-Prometheus", type:"prometheus", url:"http://10.0.0.1:9090", timeout_sec:10},
+    {id:"es-main", name:"主机房-ES", type:"elasticsearch", url:"http://10.0.0.1:9200", username_env:"ES_USER", password_env:"ES_PASS", timeout_sec:10}
+  ], '数据源配置模板.json');
+}
+function _downloadJSON(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = filename; a.click();
+}
+
+// ── 大模型 ──────────────────────────────────────────────────────────────────
+function editLlm(m){
+  document.getElementById('llm-modal-title').textContent = '编辑模型：' + m.name;
+  fillForm('form-llm', m);
+  document.getElementById('llm-id').value = m.id || '';
+  openModal('modal-llm');
+}
+async function saveLlmModel(){
+  const form = document.getElementById('form-llm');
+  const fd = new FormData(form);
+  if(!fd.get('id')) fd.set('id', 'llm_' + Date.now());
+  const r = await fetch('/api/llm/models', {method:'POST', body: fd});
+  if(r.ok){ alert('模型已保存'); closeModal('modal-llm'); location.reload(); }
+  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
+}
+async function setActiveLlm(id){
+  const r = await fetch('/api/llm/models/' + id + '/activate', {method:'POST'});
+  if(r.ok) location.reload();
+  else alert('操作失败');
+}
+
+// ── 知识库 ──────────────────────────────────────────────────────────────────
+async function uploadKb(input){
+  const files = input.files;
+  if(!files.length) return;
+  const fd = new FormData();
+  for(const f of files) fd.append('files', f);
+  const r = await fetch('/api/knowledge-base/upload', {method:'POST', body: fd});
+  if(r.ok){ alert('上传成功'); location.reload(); }
+  else alert('上传失败');
+  input.value = '';
+}
+async function updateKb(input, filename){
+  const file = input.files[0];
+  if(!file) return;
+  const fd = new FormData(); fd.append('file', file); fd.append('replace', filename);
+  const r = await fetch('/api/knowledge-base/update', {method:'POST', body: fd});
+  if(r.ok){ alert('更新成功'); location.reload(); }
+  else alert('更新失败');
+  input.value = '';
+}
+
+// ── 通知 ────────────────────────────────────────────────────────────────────
+async function saveNotifier(type, formId){
+  const form = document.getElementById(formId);
+  const fd = new FormData(form);
+  fd.set('type', type);
+  // 设置启用状态
+  const chk = document.getElementById(type === 'wechat_work' ? 'wechat-enabled' : (type === 'feishu' ? 'feishu-enabled' : 'email-enabled'));
+  fd.set('enabled', chk && chk.checked ? 'true' : 'false');
+  const r = await fetch('/api/notifiers', {method:'POST', body: fd});
+  if(r.ok) alert('通知配置已保存');
+  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
 }
 </script>
 {% endblock %}

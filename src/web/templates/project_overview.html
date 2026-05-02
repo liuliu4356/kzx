@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }} — 三思GDB巡检平台{% endblock %}
+{% block page_title %}{{ page_title }}{% endblock %}
+{% block page_subtitle %}项目总览 · 文档中心{% endblock %}
+{% block content %}
+
+{% if content_html %}
+<div class="card">
+  <div class="md-content">{{ content_html | safe }}</div>
+</div>
+{% elif content_raw %}
+<div class="card">
+  <div id="md-render-target" class="md-content" style="display:none"></div>
+  <pre id="md-raw" style="display:none">{{ content_raw }}</pre>
+  <div id="md-fallback" class="md-content">
+    <pre style="white-space:pre-wrap;font-family:inherit">{{ content_raw }}</pre>
+  </div>
+</div>
+{% else %}
+<div class="card empty">
+  <div class="empty-icon">📄</div>
+  <p>{{ empty_msg or '暂无内容' }}</p>
+</div>
+{% endif %}
+
+{% if extra_links %}
+<div class="card">
+  <div class="card-title">相关文档</div>
+  <ul style="padding-left:1.25rem;line-height:2">
+    {% for link in extra_links %}
+    <li><a href="{{ link.url }}" {% if link.external %}target="_blank"{% endif %} style="color:var(--blue)">{{ link.label }}</a>
+      {% if link.desc %}<span class="text-muted"> — {{ link.desc }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if content_raw %}
+<script>
+// 简单的 Markdown → HTML 渲染（前端）
+(function(){
+  const raw = document.getElementById('md-raw').textContent;
+  let html = raw
+    // 代码块
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_,lang,code)=>`<pre><code>${esc(code.trim())}</code></pre>`)
+    // 行内代码
+    .replace(/`([^`]+)`/g, (_,c)=>`<code>${esc(c)}</code>`)
+    // 标题
+    .replace(/^#{6}\s+(.+)$/gm, '<h6>$1</h6>')
+    .replace(/^#{5}\s+(.+)$/gm, '<h5>$1</h5>')
+    .replace(/^#{4}\s+(.+)$/gm, '<h4>$1</h4>')
+    .replace(/^#{3}\s+(.+)$/gm, '<h3>$1</h3>')
+    .replace(/^#{2}\s+(.+)$/gm, '<h2>$1</h2>')
+    .replace(/^#{1}\s+(.+)$/gm, '<h1>$1</h1>')
+    // 水平线
+    .replace(/^---+$/gm, '<hr>')
+    // 粗体/斜体
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // 链接/图片
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    // 引用块
+    .replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>')
+    // 列表
+    .replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/^(\d+)\.\s+(.+)$/gm, '<li>$2</li>')
+    // 段落（空行分隔）
+    .replace(/\n\n+/g, '\n</p><p>\n')
+    // 清理
+    .replace(/<\/li>\n<li>/g, '</li><li>')
+    .replace(/(<li>[\s\S]+?<\/li>)/g, '<ul>$1</ul>');
+  // 合并相邻ul
+  html = html.replace(/<\/ul>\s*<ul>/g, '');
+  // wrap in p
+  if(!html.startsWith('<h') && !html.startsWith('<p')){
+    html = '<p>' + html + '</p>';
+  }
+  function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  const target = document.getElementById('md-render-target');
+  target.innerHTML = html;
+  target.style.display = '';
+  document.getElementById('md-fallback').style.display = 'none';
+})();
+
+function esc(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+{% endif %}
+{% endblock %}

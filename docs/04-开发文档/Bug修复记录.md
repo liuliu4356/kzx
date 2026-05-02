@@ -405,5 +405,104 @@ GET /api/config/export → 200 OK
 
 ---
 
-文档版本: v1.2.5
+## v1.3.0 新增功能记录 (2026-05-02)
+
+### 功能 1：菜单结构全面重构
+
+**变更说明：**
+侧边栏从平铺链接改为多级可折叠子菜单，新增「项目总览」一级菜单。
+
+| 菜单项 | 变更前 | 变更后 |
+|--------|--------|--------|
+| 巡检指标 | 单链接 → `/queries` | 子菜单：Prometheus指标配置 / ES日志查询配置 / 导入配置 / 导出配置 / 配置模板下载 |
+| 巡检报告 | 子菜单（历史+设置） | 同上，修复高亮 Bug |
+| 项目总览 | 不存在 | 新增子菜单：项目地址 / 项目架构 / 文档索引 / 部署文档 / 小白手册 / Bug记录 |
+
+**涉及文件：**`src/web/templates/base.html`、`src/web/static/style.css`
+
+---
+
+### 功能 2：数据源连接支持多条管理
+
+**变更说明：**
+系统设置 → 数据源连接 Tab 从单条 Prometheus + 单条 ES 改为多条数据源列表，支持添加/编辑/删除，以及导出/导入/配置模板下载。
+
+**新增 API：**
+- `POST /api/datasources` — 添加或更新一条数据源
+- `DELETE /api/datasources/{id}` — 删除数据源
+- `GET /api/datasources/export` — 导出全部数据源为 JSON
+- `POST /api/datasources/import` — 批量导入数据源
+
+**涉及文件：**`src/web/templates/settings.html`、`src/web/app.py`、`src/web/config_store.py`
+
+---
+
+### 功能 3：AI 分析支持多大模型 + 知识库
+
+**变更说明：**
+- 大模型配置改为多模型列表，支持 Anthropic Claude、OpenAI 兼容内网接口等，可切换默认模型
+- 新增知识库模块（`knowledge_base/` 目录），支持上传 Excel/PDF/Markdown 格式，巡检无大模型时自动作为分析参考
+
+**新增 API：**
+- `POST /api/llm/models` — 添加/更新大模型
+- `DELETE /api/llm/models/{id}` — 删除大模型
+- `POST /api/llm/models/{id}/activate` — 设为默认
+- `POST /api/knowledge-base/upload` — 上传（支持多文件）
+- `POST /api/knowledge-base/update` — 替换更新
+- `GET /api/knowledge-base/download/{filename}` — 下载
+- `DELETE /api/knowledge-base/{filename}` — 删除
+
+**涉及文件：**`src/web/templates/settings.html`、`src/web/app.py`、`src/web/config_store.py`
+
+---
+
+### 功能 4：通知配置提供完整 Web UI
+
+**变更说明：**
+通知 Tab 从"请手动编辑 config.yaml"改为实际的表单配置界面，支持三种渠道：
+
+| 渠道 | 配置字段 |
+|------|---------|
+| 邮件 | SMTP服务器/端口/SSL/发件人/收件人/用户名密码环境变量 |
+| 企业微信 | Webhook URL、@成员列表 |
+| 飞书 | Webhook URL、签名密钥环境变量 |
+
+每种渠道均有启用/禁用开关。
+
+**新增 API：**`POST /api/notifiers`（通过 `type` 字段区分渠道）
+
+**涉及文件：**`src/web/templates/settings.html`、`src/web/app.py`、`src/web/config_store.py`
+
+---
+
+### 功能 5：巡检报告历史页独立化
+
+**变更说明：**
+原报告历史页顶部有指向巡检控制台的 Tab 链接（不符合产品预期），本次移除，页面仅展示历史报告的查看/下载/删除操作。
+
+**涉及文件：**`src/web/templates/reports.html`
+
+---
+
+### 功能 6：项目总览页（新建）
+
+**变更说明：**
+新增 `project_overview.html` 模板和 `/overview/{page}` 路由，自动读取并渲染以下文档：
+
+| 子项 | 对应文件 |
+|------|---------|
+| 项目地址 | `README.md` |
+| 项目架构 | `docs/X项目监控系统产品手册.md` |
+| 项目文档索引 | `docs/00-文档索引/README.md` |
+| 项目部署文档 | `docs/01-部署文档/01-生产环境部署指南.md` |
+| 小白操作手册 | `docs/02-小白文档/小白操作手册.md` |
+| Bug修复并记录 | `CHANGELOG.md` |
+
+Markdown 渲染通过前端 JS 实现（约 20 行正则），不引入额外依赖。
+
+**涉及文件：**`src/web/templates/project_overview.html`（新建）、`src/web/app.py`
+
+---
+
+文档版本: v1.3.0
 更新日期: 2026-05-02

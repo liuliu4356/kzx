@@ -1,27 +1,105 @@
 {% extends "base.html" %}
-{% block title %}巡检控制台 — GDB{% endblock %}
-{% block content %}
-{% set sites = raw.get('sites', []) %}
-{% set pqs = raw.get('prometheus',{}).get('queries',[]) %}
-<h1 class="page-title">巡检控制台</h1>
+{% block title %}巡检控制台 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}巡检控制台{% endblock %}
+{% block page_subtitle %}欢迎回来！在此发起巡检、查看系统运行状态。{% endblock %}
 
-<div class="grid-3" style="margin-bottom:1rem">
-  <div class="card stat">
-    <div class="num {% if sites|length == 0 %}warn{% else %}ok{% endif %}">{{ sites|length }}</div>
-    <div class="label">已配置机房</div>
+{% block content %}
+{% set sites    = raw.get('sites', []) %}
+{% set pqs      = raw.get('prometheus',{}).get('queries',[]) %}
+{% set esqs     = raw.get('elasticsearch',{}).get('queries',[]) %}
+{% set dss      = raw.get('datasources',[]) %}
+{% set models   = raw.get('llm',{}).get('models',[]) %}
+{% set kb_files = raw.get('_kb_count', 0) %}
+
+<!-- ── 第一行统计卡片 ─────────────────────────── -->
+<div class="grid-4" style="margin-bottom:16px">
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-blue">🏢</div>
+    <div class="stat-info">
+      <div class="stat-value {% if sites|length == 0 %}sv-warn{% else %}sv-blue{% endif %}">{{ sites|length }}</div>
+      <div class="stat-label">已配置机房</div>
+      <div class="stat-sub">{% if sites|length == 0 %}尚未配置{% else %}{{ sites|map(attribute='label')|join(' / ') }}{% endif %}</div>
+    </div>
   </div>
-  <div class="card stat">
-    <div class="num {% if pqs|length == 0 %}warn{% else %}ok{% endif %}">{{ pqs|length }}</div>
-    <div class="label">Prometheus 指标</div>
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-purple">📊</div>
+    <div class="stat-info">
+      <div class="stat-value {% if pqs|length == 0 %}sv-warn{% else %}sv-purple{% endif %}">{{ pqs|length }}</div>
+      <div class="stat-label">Prometheus 指标</div>
+      <div class="stat-sub">{% if pqs|length == 0 %}尚未配置{% else %}已配置 {{ pqs|length }} 条规则{% endif %}</div>
+    </div>
   </div>
-  <div class="card stat">
-    <div class="num {% if reports|length == 0 %}warn{% else %}ok{% endif %}">{{ reports|length }}</div>
-    <div class="label">历史报告</div>
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-cyan">🔍</div>
+    <div class="stat-info">
+      <div class="stat-value {% if esqs|length == 0 %}sv-warn{% else %}sv-teal{% endif %}">{{ esqs|length }}</div>
+      <div class="stat-label">ES 日志查询</div>
+      <div class="stat-sub">{% if esqs|length == 0 %}尚未配置{% else %}已配置 {{ esqs|length }} 条规则{% endif %}</div>
+    </div>
   </div>
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-green">📋</div>
+    <div class="stat-info">
+      <div class="stat-value {% if reports|length == 0 %}sv-warn{% else %}sv-green{% endif %}">{{ reports|length }}</div>
+      <div class="stat-label">历史报告</div>
+      <div class="stat-sub">{% if reports %}最近：{{ reports[0].mtime }}{% else %}暂无报告{% endif %}</div>
+    </div>
+  </div>
+
 </div>
 
+<!-- ── 第二行统计卡片 ─────────────────────────── -->
+<div class="grid-4" style="margin-bottom:20px">
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-teal">🔗</div>
+    <div class="stat-info">
+      <div class="stat-value {% if dss|length == 0 %}sv-warn{% else %}sv-teal{% endif %}">{{ dss|length }}</div>
+      <div class="stat-label">数据源连接</div>
+      <div class="stat-sub">Prometheus + ES</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-orange">🤖</div>
+    <div class="stat-info">
+      <div class="stat-value {% if models|length == 0 %}sv-warn{% else %}sv-orange{% endif %}">{{ models|length }}</div>
+      <div class="stat-label">AI 模型</div>
+      <div class="stat-sub">{% if raw.get('llm',{}).get('active_model') %}默认：{{ raw.get('llm',{}).get('active_model') }}{% else %}未配置{% endif %}</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-blue">📚</div>
+    <div class="stat-info">
+      <div class="stat-value sv-blue">{{ kb_files }}</div>
+      <div class="stat-label">知识库文件</div>
+      <div class="stat-sub">Excel / PDF / MD</div>
+    </div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-icon-wrap si-green">✅</div>
+    <div class="stat-info">
+      <div class="stat-value" id="sys-status" style="font-size:22px">—</div>
+      <div class="stat-label">系统就绪</div>
+      <div class="stat-sub" id="sys-status-sub">检查中…</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── 执行巡检卡片 ───────────────────────────── -->
 <div class="card">
-  <div class="card-title">▶ 执行巡检</div>
+  <div class="card-title">
+    <div class="card-title-icon ni-teal">🚀</div>
+    执行巡检
+  </div>
+
   <div class="inspect-form">
     <div class="form-group">
       <label>巡检模式</label>
@@ -43,8 +121,8 @@
     <div class="form-group">
       <label>报告格式</label>
       <select id="fmt">
-        <option value="html">HTML（可在浏览器查看）</option>
-        <option value="md">Markdown（.md 文件）</option>
+        <option value="html">HTML（推荐）</option>
+        <option value="md">Markdown</option>
       </select>
     </div>
     <div class="form-group">
@@ -55,12 +133,12 @@
       </select>
     </div>
     <div class="form-group" style="align-self:flex-end">
-      <button class="btn btn-primary" onclick="runInspect()">🚀 开始巡检</button>
+      <button class="btn btn-primary" onclick="runInspect()" id="start-btn">🚀 开始巡检</button>
     </div>
   </div>
 
-  <!-- 4-step progress bar -->
-  <div id="steps" style="display:none;margin:1rem 0 .5rem">
+  <!-- 进度条 -->
+  <div id="steps" style="display:none;margin:14px 0 6px">
     <div style="display:flex;gap:0;align-items:stretch">
       <div class="step-item" id="step-1" data-label="⚙️ 加载配置"></div>
       <div class="step-sep">›</div>
@@ -73,48 +151,88 @@
   </div>
 
   <div id="log-box"></div>
-  <div id="report-link" style="display:none;margin-top:.75rem"></div>
+  <div id="report-link" style="display:none;margin-top:12px"></div>
 </div>
 
+<!-- ── 最近报告 ──────────────────────────────── -->
 {% if reports %}
-<div class="card">
-  <div class="card-title">📋 最近报告</div>
+<div class="card" style="margin-bottom:0">
+  <div class="card-title">
+    <div class="card-title-icon ni-green">📋</div>
+    最近报告
+    <span style="margin-left:auto"><a href="/reports" class="btn btn-ghost btn-sm">查看全部 →</a></span>
+  </div>
   <table>
-    <thead><tr><th>文件名</th><th>大小</th><th>生成时间</th><th>操作</th></tr></thead>
+    <thead>
+      <tr>
+        <th>文件名</th>
+        <th>格式</th>
+        <th>大小</th>
+        <th>生成时间</th>
+        <th>操作</th>
+      </tr>
+    </thead>
     <tbody>
     {% for r in reports %}
     <tr>
       <td><code>{{ r.name }}</code></td>
+      <td>
+        {% if r.name.endswith('.html') %}
+          <span class="badge badge-blue">HTML</span>
+        {% else %}
+          <span class="badge badge-gray">MD</span>
+        {% endif %}
+      </td>
       <td class="text-muted">{{ r.size_kb }} KB</td>
       <td class="text-muted">{{ r.mtime }}</td>
-      <td><a class="btn btn-outline btn-sm" href="/reports/view/{{ r.name }}" target="_blank">查看</a></td>
+      <td>
+        <div class="actions">
+          <a class="btn btn-outline btn-sm" href="/reports/view/{{ r.name }}" target="_blank">查看</a>
+          <a class="btn btn-ghost btn-sm" href="/reports/download/{{ r.name }}">下载</a>
+        </div>
+      </td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+{% else %}
+<div class="card" style="margin-bottom:0">
+  <div class="empty">
+    <div class="empty-icon">📋</div>
+    <p>暂无巡检报告，点击上方「开始巡检」生成第一份报告。</p>
+  </div>
+</div>
 {% endif %}
+
 {% endblock %}
 
 {% block scripts %}
-<style>
-.step-item{flex:1;text-align:center;padding:.4rem .5rem;font-size:.8125rem;font-weight:500;
-           background:var(--gray-light);color:var(--gray);border-radius:0;transition:all .2s;}
-.step-item:first-child{border-radius:var(--radius) 0 0 var(--radius);}
-.step-item:last-child {border-radius:0 var(--radius) var(--radius) 0;}
-.step-item.active{background:var(--blue-light);color:var(--blue);}
-.step-item.done  {background:var(--green-light);color:var(--green);}
-.step-item.error {background:var(--red-light);color:var(--red);}
-.step-sep{display:flex;align-items:center;color:var(--border);font-size:1.1rem;padding:0 .1rem;background:transparent;}
-</style>
 <script>
+// 系统就绪状态检查
+(function(){
+  const sites  = {{ sites|length }};
+  const pqs    = {{ pqs|length }};
+  const el     = document.getElementById('sys-status');
+  const sub    = document.getElementById('sys-status-sub');
+  if(sites > 0 && pqs > 0){
+    el.textContent = '就绪'; el.className = 'stat-value sv-green';
+    sub.textContent = '配置完整，可直接巡检';
+  } else {
+    el.textContent = '待配置'; el.className = 'stat-value sv-warn';
+    const missing = [];
+    if(sites===0) missing.push('机房');
+    if(pqs===0) missing.push('Prometheus指标');
+    sub.textContent = '缺少：' + missing.join('、');
+  }
+})();
+
 function toggleCustom(){
   const v = document.getElementById('period').value;
   document.getElementById('start-wrap').style.display = v==='custom'?'block':'none';
-  document.getElementById('end-wrap').style.display  = v==='custom'?'block':'none';
+  document.getElementById('end-wrap').style.display   = v==='custom'?'block':'none';
 }
 
-// Steps: 1=加载配置, 2=采集数据, 3=AI分析, 4=生成报告
 function initSteps(){
   for(let i=1;i<=4;i++){
     const el=document.getElementById('step-'+i);
@@ -124,23 +242,27 @@ function initSteps(){
 }
 function setStep(n, state){
   const el=document.getElementById('step-'+n);
+  const icons={active:'⏳ ',done:'✅ ',error:'❌ '};
   el.className='step-item '+state;
-  el.textContent=(state==='active'?'⏳ ':state==='done'?'✅ ':state==='error'?'❌ ':'') + el.dataset.label.replace(/^[^ ]+ /,'');
+  el.textContent=(icons[state]||'') + el.dataset.label.replace(/^[^ ]+ /,'');
 }
 function msgToStep(msg){
   if(msg.includes('加载配置')) return 1;
-  if(msg.includes('采集')) return 2;
-  if(msg.includes('AI 分析')) return 3;
+  if(msg.includes('采集'))     return 2;
+  if(msg.includes('AI 分析'))  return 3;
   if(msg.includes('生成报告')) return 4;
   return 0;
 }
 
 async function runInspect(){
+  const btn    = document.getElementById('start-btn');
   const period = document.getElementById('period').value;
   const fmt    = document.getElementById('fmt').value;
   const skipLlm= document.getElementById('skip-llm').value;
   const logBox = document.getElementById('log-box');
   const linkBox= document.getElementById('report-link');
+
+  btn.disabled = true; btn.textContent = '⏳ 巡检中…';
   logBox.innerHTML=''; logBox.className='visible'; linkBox.style.display='none';
   initSteps();
   let currentStep=0;
@@ -154,38 +276,44 @@ async function runInspect(){
     fd.append('end',   document.getElementById('range-end').value);
   }
 
-  const resp = await fetch('/api/inspect',{method:'POST',body:fd});
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buf='';
-  while(true){
-    const {done,value} = await reader.read();
-    if(done) break;
-    buf += decoder.decode(value,{stream:true});
-    const lines = buf.split('\n\n'); buf = lines.pop();
-    for(const line of lines){
-      if(!line.startsWith('data:')) continue;
-      const msg = line.slice(5).trim();
-      if(msg.startsWith('DONE:')){
-        const fname = msg.slice(5);
-        for(let i=1;i<=4;i++) setStep(i,'done');
-        linkBox.innerHTML=`<a class="btn btn-success" href="/reports/view/${fname}" target="_blank">📄 查看报告：${fname}</a>`;
-        linkBox.style.display='block';
-        logBox.innerHTML += `<span class="log-ok">✅ 完成！</span>\n`;
-      } else if(msg.startsWith('ERROR:')){
-        if(currentStep>0) setStep(currentStep,'error');
-        logBox.innerHTML += `<span class="log-err">❌ ${msg.slice(6)}</span>\n`;
-      } else {
-        const step = msgToStep(msg);
-        if(step>0){
-          if(currentStep>0 && currentStep!==step) setStep(currentStep,'done');
-          currentStep=step;
-          setStep(step,'active');
+  try {
+    const resp = await fetch('/api/inspect',{method:'POST',body:fd});
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf='';
+    while(true){
+      const {done,value} = await reader.read();
+      if(done) break;
+      buf += decoder.decode(value,{stream:true});
+      const lines = buf.split('\n\n'); buf = lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data:')) continue;
+        const msg = line.slice(5).trim();
+        if(msg.startsWith('DONE:')){
+          const fname = msg.slice(5);
+          for(let i=1;i<=4;i++) setStep(i,'done');
+          linkBox.innerHTML=`<a class="btn btn-primary" href="/reports/view/${fname}" target="_blank">📄 查看报告：${fname}</a>
+            <a class="btn btn-ghost btn-sm" href="/reports/download/${fname}" style="margin-left:8px">⬇ 下载</a>`;
+          linkBox.style.display='block';
+          logBox.innerHTML += `<span class="log-ok">✅ 巡检完成！</span>\n`;
+        } else if(msg.startsWith('ERROR:')){
+          if(currentStep>0) setStep(currentStep,'error');
+          logBox.innerHTML += `<span class="log-err">❌ ${msg.slice(6)}</span>\n`;
+        } else {
+          const step = msgToStep(msg);
+          if(step>0){
+            if(currentStep>0 && currentStep!==step) setStep(currentStep,'done');
+            currentStep=step; setStep(step,'active');
+          }
+          logBox.innerHTML += `<span class="log-info">${msg}</span>\n`;
         }
-        logBox.innerHTML += `<span class="log-info">${msg}</span>\n`;
+        logBox.scrollTop = logBox.scrollHeight;
       }
-      logBox.scrollTop = logBox.scrollHeight;
     }
+  } catch(e) {
+    logBox.innerHTML += `<span class="log-err">❌ 网络错误: ${e}</span>\n`;
+  } finally {
+    btn.disabled = false; btn.textContent = '🚀 开始巡检';
   }
 }
 </script>
