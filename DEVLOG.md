@@ -298,10 +298,82 @@ python -m src.main inspect --start 2026-05-01T00:00 --end 2026-05-02T00:00
 
 ---
 
+---
+
+## Demo-6 · Web 可视化管理界面
+
+**日期**：2026-05-02  
+**状态**：✅ 完成
+
+### 背景
+
+所有配置写在 config.yaml，非技术用户难以维护；需要一个简洁的 Web UI 支持在线调整机房、巡检指标、触发巡检、查看报告，同时支持 HTML / Markdown 双格式报告。
+
+### 完成内容
+
+| 模块 | 说明 |
+|---|---|
+| `src/web/app.py` | FastAPI 应用，页面路由 + REST API + SSE 流式巡检输出 |
+| `src/web/config_store.py` | config.yaml 读写层（CRUD for sites / prom queries / es queries / settings） |
+| `src/web/static/style.css` | 纯 CSS 设计系统，无外部依赖 |
+| `src/web/templates/base.html` | 侧边栏导航 + 公共 JS 工具函数 |
+| `src/web/templates/index.html` | 巡检控制台：选模式/格式，SSE 实时进度，一键查看报告 |
+| `src/web/templates/sites.html` | 机房增删改，Modal 表单 |
+| `src/web/templates/queries.html` | PromQL 和 ES 查询管理，含描述/FAQ 编辑 |
+| `src/web/templates/settings.html` | 数据源连接 / AI / 通知 / 批处理窗口，Tab 布局 |
+| `src/web/templates/reports.html` | 历史报告列表，一键打开 |
+| `templates/report.html.j2` | HTML 报告模板，🔴 异常窗口表、FAQ 块、完整样式 |
+| `src/reporter.py` | 新增 `fmt` 参数（"md"/"html"），注入 FAQ 到结果对象 |
+| `src/collectors/*.py` | `PromResult`/`PromRangeResult`/`ESResult` 均加 `faq` 字段 |
+| `src/config.py` | `PromQuery`/`ESQuery` 加 `description`/`faq` 字段 |
+| `src/main.py` | 新增 `web` 命令（uvicorn 启动），`inspect` 加 `--format md/html` |
+| `requirements.txt` | 新增 fastapi / uvicorn[standard] / python-multipart |
+
+### Web UI 页面结构
+
+```
+🏠 巡检控制台  → 选模式/格式 → 点「开始巡检」→ SSE 实时日志 → 报告链接
+🏢 机房管理   → 机房列表 + 添加/编辑/删除（Modal）
+📊 巡检指标   → Prometheus 指标 + ES 查询（Tabs），含描述/FAQ
+⚙️ 系统设置   → 数据源 / AI / 通知 / 批处理窗口（Tabs）
+📋 报告历史   → 报告列表 + 一键查看（HTML/MD）
+```
+
+### FAQ 机制
+
+配置指标时填写 FAQ 字段，当该指标出现异常时，FAQ 内容自动附在报告对应位置：
+
+```yaml
+prometheus:
+  queries:
+    - name: cpu_usage
+      faq: |
+        1. 检查是否在批处理窗口（凌晨 2-4 点属正常）
+        2. 执行 top -c 查看高 CPU 进程
+        3. 联系 DBA 确认是否有大查询在运行
+```
+
+报告中异常项下方会显示「💡 处理建议」折叠块。
+
+### 启动方式
+
+```bash
+pip install -r requirements.txt
+
+# 启动 Web 界面
+python -m src.main web
+# → 浏览器打开 http://localhost:8000
+
+# CLI 仍然可用
+python -m src.main inspect --period 1d --format html
+```
+
+---
+
 ## 待开发（下一步）
 
 | 优先级 | 内容 |
 |---|---|
-| P2 | 表规模监控：表记录数 / 表大小 PromQL（需 GDB exporter 支持） |
-| P2 | 数据字典状态检查：禁用/禁写表必须为 0 |
-| P3 | 历史趋势对比：与上次报告 diff，标出新增异常和已恢复项 |
+| P2 | 表规模监控：表记录数 / 表大小 PromQL |
+| P2 | 数据字典状态检查：禁用/禁写表为 0 |
+| P3 | 历史趋势对比：与上次报告 diff，标出新增/已恢复异常 |

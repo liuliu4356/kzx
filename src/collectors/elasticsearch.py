@@ -25,6 +25,7 @@ class ESResult:
     hits: list[ESHit]
     error: str | None
     ignorable: bool = False
+    faq: str = ""
 
 
 def _build_body(q: ESQuery) -> dict:

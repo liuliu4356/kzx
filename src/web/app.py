@@ -10,9 +10,6 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from dotenv import load_dotenv
-
-from . import config_store as cs
 
 app = FastAPI(title="GDB 巡检系统")
 
@@ -27,41 +24,52 @@ templates = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
 
 @app.get("/", response_class=HTMLResponse)
 async def page_index(request: Request):
+    import json
     raw = cs.get_all()
     reports = _list_reports()
+    raw_json = json.dumps(raw, default=str, ensure_ascii=False)
+    reports_json = json.dumps(reports[:10], default=str, ensure_ascii=False)
     return templates.TemplateResponse("index.html", {
-        "request": request, "raw": raw, "reports": reports[:10],
+        "request": request, "raw": raw_json, "reports": reports_json,
     })
 
 
 @app.get("/sites", response_class=HTMLResponse)
 async def page_sites(request: Request):
+    import json
+    sites_json = json.dumps(cs.list_sites(), default=str, ensure_ascii=False)
     return templates.TemplateResponse("sites.html", {
-        "request": request, "sites": cs.list_sites(),
+        "request": request, "sites": sites_json,
     })
 
 
 @app.get("/queries", response_class=HTMLResponse)
 async def page_queries(request: Request):
+    import json
+    prom_json = json.dumps(cs.list_prom_queries(), default=str, ensure_ascii=False)
+    es_json = json.dumps(cs.list_es_queries(), default=str, ensure_ascii=False)
     return templates.TemplateResponse("queries.html", {
         "request": request,
-        "prom_queries": cs.list_prom_queries(),
-        "es_queries": cs.list_es_queries(),
+        "prom_queries": prom_json,
+        "es_queries": es_json,
     })
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def page_settings(request: Request):
-    raw = cs.get_all()
+    import json
+    raw_json = json.dumps(cs.get_all(), default=str, ensure_ascii=False)
     return templates.TemplateResponse("settings.html", {
-        "request": request, "raw": raw,
+        "request": request, "raw": raw_json,
     })
 
 
 @app.get("/reports", response_class=HTMLResponse)
 async def page_reports(request: Request):
+    import json
+    reports_json = json.dumps(_list_reports(), default=str, ensure_ascii=False)
     return templates.TemplateResponse("reports.html", {
-        "request": request, "reports": _list_reports(),
+        "request": request, "reports": reports_json,
     })
 
 

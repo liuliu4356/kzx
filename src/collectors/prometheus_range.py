@@ -31,6 +31,7 @@ class PromRangeResult:
     period_avg: float | None
     anomaly_windows: list[AnomalyWindow] = field(default_factory=list)
     error: str | None = None
+    faq: str = ""
 
     @property
     def is_anomaly(self) -> bool:

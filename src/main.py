@@ -69,9 +69,11 @@ def init_config(force: bool) -> None:
               help="自定义时间段结束（UTC）")
 @click.option("--skip-llm", is_flag=True, help="跳过 AI 分析")
 @click.option("--notify/--no-notify", default=True, show_default=True, help="是否发送通知")
+@click.option("--format", "fmt", type=click.Choice(["md", "html"]), default="md",
+              show_default=True, help="报告格式")
 def inspect(config_path: str, output_dir: str | None, period: str,
             start: str | None, end: str | None,
-            skip_llm: bool, notify: bool) -> None:
+            skip_llm: bool, notify: bool, fmt: str) -> None:
     load_dotenv()
     cfg = load_config(config_path)
     if output_dir:
@@ -115,7 +117,7 @@ def inspect(config_path: str, output_dir: str | None, period: str,
         click.echo("      完成")
 
     click.echo("[4/4] 生成报告...")
-    out_path = reporter.render(site_results, ai_analysis, cfg, period_start, period_end)
+    out_path = reporter.render(site_results, ai_analysis, cfg, period_start, period_end, fmt=fmt)
     click.echo(f"[OK] 报告已写入: {out_path}")
 
     if notify and cfg.notifiers:
@@ -125,6 +127,21 @@ def inspect(config_path: str, output_dir: str | None, period: str,
             click.echo(f"  [WARN] {e}", err=True)
         ok = len(cfg.notifiers) - len(errs)
         click.echo(f"      完成: {ok}/{len(cfg.notifiers)} 发送成功")
+
+
+@cli.command("web")
+@click.option("--host", default="0.0.0.0", show_default=True)
+@click.option("--port", default=8000, show_default=True)
+@click.option("--reload", is_flag=True, help="开发模式热重载")
+def web(host: str, port: int, reload: bool) -> None:
+    """启动 Web 可视化管理界面。"""
+    try:
+        import uvicorn
+    except ImportError:
+        click.echo("请先安装 web 依赖: pip install fastapi uvicorn[standard] python-multipart", err=True)
+        sys.exit(1)
+    click.echo(f"🌐 Web 界面启动: http://{host}:{port}")
+    uvicorn.run("src.web.app:app", host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":
