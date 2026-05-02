@@ -23,6 +23,8 @@ _PROJ_ROOT = _WEB_DIR.parent.parent
 app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
 # Use direct Jinja2 to avoid Starlette template caching issue
+from jinja2 import Environment, FileSystemLoader
+
 jinja_env = Environment(loader=FileSystemLoader(str(_WEB_DIR / "templates")))
 
 def render_template(name: str, context: dict) -> HTMLResponse:
@@ -49,9 +51,20 @@ async def page_sites(request: Request):
 
 @app.get("/queries", response_class=HTMLResponse)
 async def page_queries(request: Request):
-    prom_queries = cs.list_prom_queries()
-    es_queries = cs.list_es_queries()
-    return render_template("queries.html", {"prom_queries": prom_queries, "es_queries": es_queries})
+    raw = cs._load_raw()
+    prom_queries = raw.get("prometheus", {}).get("queries", [])
+    es_queries = raw.get("elasticsearch", {}).get("queries", [])
+    sites = raw.get("sites") or raw.get("datacenters", [])
+    export_data = json.dumps({
+        "prometheus": raw.get("prometheus", {}),
+        "elasticsearch": raw.get("elasticsearch", {}),
+        "sites": sites,
+    }, ensure_ascii=False)
+    return render_template("queries.html", {
+        "prom_queries": prom_queries,
+        "es_queries": es_queries,
+        "export_data_json": export_data,
+    })
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -63,7 +76,13 @@ async def page_settings(request: Request):
 @app.get("/reports", response_class=HTMLResponse)
 async def page_reports(request: Request):
     reports = _list_reports()
-    return render_template("reports.html", {"reports": reports})
+    return render_template("reports.html", {"reports": reports, "subtab": request.query_params.get("subtab", "")})
+
+
+@app.get("/reports/settings", response_class=HTMLResponse)
+async def page_reports_settings(request: Request):
+    raw = cs.get_all()
+    return render_template("reports_settings.html", {"raw": raw, "subtab": "settings"})
 
 
 # ── API: Sites ─────────────────────────────────────────────────────────────
@@ -145,6 +164,35 @@ async def api_delete_es(name: str):
     return JSONResponse({"ok": True})
 
 
+# ── API: Import/Export ───────────────────────────────────────────────────────
+
+@app.get("/api/config/export")
+async def api_export():
+    raw = cs._load_raw()
+    return JSONResponse({
+        "prometheus": raw.get("prometheus", {}),
+        "elasticsearch": raw.get("elasticsearch", {}),
+        "sites": raw.get("sites") or raw.get("datacenters", []),
+    })
+
+
+@app.post("/api/config/import")
+async def api_import(request: Request):
+    body = await request.json()
+    data = body.get("data", {})
+    raw = cs._load_raw()
+    if body.get("prom") and "prometheus" in data:
+        raw["prometheus"] = data["prometheus"]
+    if body.get("es") and "elasticsearch" in data:
+        raw["elasticsearch"] = data["elasticsearch"]
+    if body.get("sites"):
+        sites = data.get("sites") or data.get("datacenters")
+        if sites is not None:
+            raw["sites"] = sites
+    cs._save_raw(raw)
+    return JSONResponse({"ok": True})
+
+
 # ── API: Settings ──────────────────────────────────────────────────────────
 
 @app.post("/api/settings/prometheus")
@@ -187,10 +235,74 @@ async def api_llm_settings(
 async def api_report_settings(
     output_dir: str = Form("reports"),
     language: str = Form("zh-CN"),
+    retention_days: int = Form(7),
 ):
     cs.save_settings("report", {"output_dir": output_dir, "language": language,
-                                "filename_format": "%Y-%m-%d-%H%M"})
+                                "filename_format": "%Y-%m-%d-%H%M",
+                                "retention_days": retention_days})
     return JSONResponse({"ok": True})
+
+
+# ── API: 在线测试指标 ──────────────────────────────────────────────────────
+
+@app.post("/api/test/prom")
+async def api_test_prom(promql: str = Form(...)):
+    import httpx as _httpx
+    try:
+        raw = cs._load_raw()
+        prom_url = raw.get("prometheus", {}).get("url", "http://localhost:9090")
+        timeout = int(raw.get("prometheus", {}).get("timeout_sec", 10))
+        with _httpx.Client(timeout=timeout) as client:
+            resp = client.get(f"{prom_url.rstrip('/')}/api/v1/query",
+                              params={"query": promql})
+            resp.raise_for_status()
+            data = resp.json()
+        if data.get("status") != "success":
+            return JSONResponse({"ok": False, "error": data.get("error", "未知错误")})
+        results = data.get("data", {}).get("result", [])
+        samples = []
+        for r in results[:5]:
+            if isinstance(r, dict) and "value" in r:
+                inst = r.get("metric", {}).get("instance", "")
+                samples.append({"instance": inst, "value": r["value"][1]})
+        return JSONResponse({"ok": True, "count": len(results), "samples": samples})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+
+@app.post("/api/test/es")
+async def api_test_es(
+    index: str = Form(...),
+    query_string: str = Form(...),
+    time_range_hours: int = Form(24),
+):
+    import httpx as _httpx, os as _os
+    from datetime import timedelta as _td
+    try:
+        raw = cs._load_raw()
+        es_cfg = raw.get("elasticsearch", {})
+        es_url = es_cfg.get("url", "http://localhost:9200")
+        timeout = int(es_cfg.get("timeout_sec", 10))
+        uenv = es_cfg.get("username_env") or ""
+        penv = es_cfg.get("password_env") or ""
+        user = _os.environ.get(uenv) if uenv else None
+        pw = _os.environ.get(penv) if penv else None
+        auth = (user, pw) if user and pw else None
+        since = (datetime.now(timezone.utc) - _td(hours=time_range_hours)).isoformat()
+        body = {"size": 0, "query": {"bool": {"must": [
+            {"query_string": {"query": query_string}},
+            {"range": {"@timestamp": {"gte": since}}},
+        ]}}}
+        with _httpx.Client(timeout=timeout) as client:
+            resp = client.post(f"{es_url.rstrip('/')}/{index}/_search",
+                               json=body, auth=auth)
+            resp.raise_for_status()
+            data = resp.json()
+        total_obj = data.get("hits", {}).get("total", 0)
+        total = total_obj["value"] if isinstance(total_obj, dict) else int(total_obj)
+        return JSONResponse({"ok": True, "total": total})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
 
 
 # ── API: 触发巡检（SSE 流式输出）─────────────────────────────────────────
@@ -295,7 +407,33 @@ async def view_report(filename: str):
     return HTMLResponse(f"<pre style='font-family:monospace;padding:2rem'>{content}</pre>")
 
 
+@app.get("/reports/download/{filename}")
+async def download_report(filename: str):
+    path = _PROJ_ROOT / "reports" / filename
+    debug_info = f"filename={filename}, path={path}, exists={path.exists()}"
+    if not path.exists():
+        return JSONResponse({"error": debug_info}, status_code=404)
+    media_type = "text/html" if filename.endswith(".html") else "text/markdown"
+    resp = FileResponse(str(path), media_type=media_type)
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@app.delete("/api/reports/{filename}")
+async def delete_report(filename: str):
+    path = _PROJ_ROOT / "reports" / filename
+    if not path.exists():
+        raise HTTPException(404, "报告不存在")
+    path.unlink()
+    return JSONResponse({"ok": True})
+
+
 def _list_reports() -> list[dict]:
+    try:
+        days = int(cs._load_raw().get("report", {}).get("retention_days", 7))
+    except Exception:
+        days = 7
+    _clean_old_reports(days)
     reports_dir = _PROJ_ROOT / "reports"
     if not reports_dir.exists():
         return []
@@ -307,3 +445,13 @@ def _list_reports() -> list[dict]:
     return [{"name": f.name, "size_kb": round(f.stat().st_size / 1024, 1),
              "mtime": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")}
             for f in files]
+
+
+def _clean_old_reports(days: int = 7):
+    reports_dir = _PROJ_ROOT / "reports"
+    if not reports_dir.exists():
+        return
+    cutoff = datetime.now().timestamp() - days * 86400
+    for f in reports_dir.iterdir():
+        if f.suffix in (".html", ".md") and f.stat().st_mtime < cutoff:
+            f.unlink()

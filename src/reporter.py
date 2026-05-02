@@ -37,21 +37,29 @@ def render(
                       f"{period_end.strftime('%Y-%m-%d %H:%M')} UTC"
                       f"（步长 {cfg.inspection.step_minutes} 分钟）")
 
-    # 将 faq 从 config 注入到 PromResult / PromRangeResult（按 name 匹配）
+    # 将 faq / description 从 config 注入到各 Result 对象（按 name 匹配）
     faq_map: dict[str, str] = {q.name: q.faq for q in cfg.prometheus.queries}
+    desc_map: dict[str, str] = {q.name: q.description for q in cfg.prometheus.queries}
     for s in site_results:
         for r in s.prom_results:
             if not getattr(r, "faq", ""):
                 r.faq = faq_map.get(r.name, "")  # type: ignore[attr-defined]
+            if not getattr(r, "description", ""):
+                r.description = desc_map.get(r.name, "")  # type: ignore[attr-defined]
         for r in s.prom_range_results:
             if not getattr(r, "faq", ""):
                 r.faq = faq_map.get(r.name, "")  # type: ignore[attr-defined]
+            if not getattr(r, "description", ""):
+                r.description = desc_map.get(r.name, "")  # type: ignore[attr-defined]
 
     es_faq_map: dict[str, str] = {q.name: q.faq for q in cfg.elasticsearch.queries}
+    es_desc_map: dict[str, str] = {q.name: q.description for q in cfg.elasticsearch.queries}
     for s in site_results:
         for r in s.es_results:
             if not getattr(r, "faq", ""):
                 r.faq = es_faq_map.get(r.name, "")  # type: ignore[attr-defined]
+            if not getattr(r, "description", ""):
+                r.description = es_desc_map.get(r.name, "")  # type: ignore[attr-defined]
 
     content = tmpl.render(
         generated_at=now.strftime("%Y-%m-%d %H:%M UTC"),

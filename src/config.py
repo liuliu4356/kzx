@@ -63,6 +63,7 @@ class ReportConfig:
     output_dir: str
     language: str
     filename_format: str
+    retention_days: int = 7
 
 
 @dataclass
@@ -179,6 +180,7 @@ def load_config(path: str | Path) -> Config:
         output_dir=r.get("output_dir", "reports"),
         language=r.get("language", "zh-CN"),
         filename_format=r.get("filename_format", "%Y-%m-%d-%H%M.md"),
+        retention_days=int(r.get("retention_days", 7)),
     )
 
     notifiers = [

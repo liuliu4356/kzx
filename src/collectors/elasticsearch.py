@@ -27,6 +27,7 @@ class ESResult:
     ignorable: bool = False
     faq: str = ""
     time_range_hours: int = 24  # 用于构造 Kibana 跳转链接的时间范围
+    description: str = ""
 
 
 def _build_body(q: ESQuery) -> dict:

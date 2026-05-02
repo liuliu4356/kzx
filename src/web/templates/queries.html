@@ -3,6 +3,48 @@
 {% block content %}
 <h1 class="page-title">📊 巡检指标配置</h1>
 
+<div style="display:flex;justify-content:space-between;margin-bottom:1rem">
+  <div>
+    <button class="btn btn-outline" onclick="openModal('modal-export')">⬇ 导出配置</button>
+    <button class="btn btn-outline" onclick="openModal('modal-import')">⬆ 导入配置</button>
+    <button class="btn btn-outline" onclick="downloadTemplate()">📄 配置模板</button>
+  </div>
+</div>
+
+<!-- 导出Modal -->
+<div class="modal-backdrop" id="modal-export" onclick="if(event.target===this)closeModal('modal-export')">
+  <div class="modal">
+    <div class="modal-title">导出配置</div>
+    <div style="padding:1rem 0">
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="exp-prom" checked> Prometheus 指标</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="exp-es" checked> ES 日志查询</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="exp-sites" checked> 机房配置</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-export')">取消</button>
+      <button class="btn btn-primary" onclick="doExport()">导出</button>
+    </div>
+  </div>
+</div>
+
+<!-- 导入Modal -->
+<div class="modal-backdrop" id="modal-import" onclick="if(event.target===this)closeModal('modal-import')">
+  <div class="modal">
+    <div class="modal-title">导入配置</div>
+    <div style="padding:1rem 0">
+      <input type="file" id="importFile" accept=".json" style="margin-bottom:1rem">
+      <div id="importPreview" style="font-size:.9rem;color:#666"></div>
+      <label style="display:block;margin-top:1rem"><input type="checkbox" id="imp-prom" checked> 覆盖 Prometheus 指标</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="imp-es" checked> 覆盖 ES 日志查询</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="imp-sites" checked> 覆盖机房配置</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-import')">取消</button>
+      <button class="btn btn-primary" onclick="doImport()">导入</button>
+    </div>
+  </div>
+</div>
+
 <div class="tabs">
   <div class="tab active" data-tab-group="q" data-tab="prom" onclick="switchTab('q','prom')">Prometheus 指标（{{ prom_queries|length }}）</div>
   <div class="tab" data-tab-group="q" data-tab="es" onclick="switchTab('q','es')">ES 日志查询（{{ es_queries|length }}）</div>
@@ -16,17 +58,22 @@
   {% if prom_queries %}
   <div class="card" style="padding:0;overflow:hidden">
     <table>
-      <thead><tr><th>指标名</th><th>PromQL（摘要）</th><th>阈值</th><th>异常判断</th><th>说明</th><th>操作</th></tr></thead>
+      <thead><tr>
+        <th style="width:36px"><input type="checkbox" id="chk-prom-all" onchange="toggleAll('prom',this.checked)" title="全选/取消"></th>
+        <th>指标名</th><th>PromQL（摘要）</th><th>阈值</th><th>异常判断</th><th>说明</th><th>操作</th>
+      </tr></thead>
       <tbody>
       {% for q in prom_queries %}
       <tr>
+        <td><input type="checkbox" class="chk-prom" value="{{ q.name }}"></td>
         <td><strong>{{ q.name }}</strong></td>
         <td><code class="truncate">{{ q.promql[:60] }}{% if q.promql|length>60 %}…{% endif %}</code></td>
         <td>{{ q.threshold }}{{ q.unit }}</td>
         <td>{{ '低于' if q.get('anomaly_when')=='lt' else '高于' }}阈值</td>
         <td class="text-muted truncate">{{ q.get('description','—') }}</td>
         <td class="actions">
-          <button class="btn btn-outline btn-sm" onclick="editProm({{ q|tojson }})">编辑</button>
+          <button class="btn btn-outline btn-sm" data-type="prom" data-name="" data-promql="{{ q.promql }}" data-threshold="{{ q.threshold }}" data-unit="{{ q.unit }}" data-anomaly_when="{{ q.get('anomaly_when','gt') }}" data-description="{{ q.get('description','') }}" data-faq="{{ q.get('faq','') }}" onclick="copyFromAttr(this,'{{ q.name }}')">复制</button>
+          <button class="btn btn-outline btn-sm" data-type="prom" data-name="{{ q.name }}" data-promql="{{ q.promql }}" data-threshold="{{ q.threshold }}" data-unit="{{ q.unit }}" data-anomaly_when="{{ q.get('anomaly_when','gt') }}" data-description="{{ q.get('description','') }}" data-faq="{{ q.get('faq','') }}" onclick="editFromAttr(this)">编辑</button>
           <button class="btn btn-danger btn-sm" onclick="del('/api/queries/prom/{{ q.name }}','删除指标「{{ q.name }}」？',true)">删除</button>
         </td>
       </tr>
@@ -47,17 +94,22 @@
   {% if es_queries %}
   <div class="card" style="padding:0;overflow:hidden">
     <table>
-      <thead><tr><th>查询名</th><th>索引</th><th>关键字</th><th>时间范围</th><th>类型</th><th>操作</th></tr></thead>
+      <thead><tr>
+        <th style="width:36px"><input type="checkbox" id="chk-es-all" onchange="toggleAll('es',this.checked)" title="全选/取消"></th>
+        <th>查询名</th><th>索引</th><th>关键字</th><th>时间范围</th><th>类型</th><th>操作</th>
+      </tr></thead>
       <tbody>
       {% for q in es_queries %}
       <tr>
+        <td><input type="checkbox" class="chk-es" value="{{ q.name }}"></td>
         <td><strong>{{ q.name }}</strong></td>
         <td><code>{{ q.index }}</code></td>
         <td class="truncate text-muted">{{ q.query_string[:50] }}{% if q.query_string|length>50 %}…{% endif %}</td>
         <td>{{ q.time_range_hours }}h</td>
         <td>{% if q.get('ignorable') %}<span class="badge badge-gray">已知噪音</span>{% else %}<span class="badge badge-ok">正常查询</span>{% endif %}</td>
         <td class="actions">
-          <button class="btn btn-outline btn-sm" onclick="editES({{ q|tojson }})">编辑</button>
+          <button class="btn btn-outline btn-sm" data-type="es" data-name="" data-index="{{ q.index }}" data-query_string="{{ q.query_string }}" data-time_range_hours="{{ q.time_range_hours }}" data-size="{{ q.get('size',50) }}" data-ignorable="{{ 'true' if q.get('ignorable') else 'false' }}" data-description="{{ q.get('description','') }}" data-faq="{{ q.get('faq','') }}" onclick="copyFromAttr(this,'{{ q.name }}')">复制</button>
+          <button class="btn btn-outline btn-sm" data-type="es" data-name="{{ q.name }}" data-index="{{ q.index }}" data-query_string="{{ q.query_string }}" data-time_range_hours="{{ q.time_range_hours }}" data-size="{{ q.get('size',50) }}" data-ignorable="{{ 'true' if q.get('ignorable') else 'false' }}" data-description="{{ q.get('description','') }}" data-faq="{{ q.get('faq','') }}" onclick="editFromAttr(this)">编辑</button>
           <button class="btn btn-danger btn-sm" onclick="del('/api/queries/es/{{ q.name }}','删除查询「{{ q.name }}」？',true)">删除</button>
         </td>
       </tr>
@@ -110,8 +162,10 @@
         <label>异常处理 FAQ（出现异常时会附在报告中）</label>
         <textarea name="faq" placeholder="1. 检查是否在批处理窗口&#10;2. 执行 top -c 查看高 CPU 进程&#10;3. 联系 DBA 确认是否有大查询"></textarea>
       </div>
+      <div id="prom-test-result" style="display:none;margin:.5rem 0;padding:.5rem .75rem;border-radius:6px;font-size:.8125rem"></div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeModal('modal-prom')">取消</button>
+        <button type="button" class="btn btn-outline" onclick="testProm()">🧪 在线测试</button>
         <button type="button" class="btn btn-primary" onclick="postForm('/api/queries/prom','form-prom','指标已保存')">保存</button>
       </div>
     </form>
@@ -162,8 +216,10 @@
         <label>异常处理 FAQ</label>
         <textarea name="faq" placeholder="发现此类日志时的排查步骤..."></textarea>
       </div>
+      <div id="es-test-result" style="display:none;margin:.5rem 0;padding:.5rem .75rem;border-radius:6px;font-size:.8125rem"></div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeModal('modal-es')">取消</button>
+        <button type="button" class="btn btn-outline" onclick="testES()">🧪 在线测试</button>
         <button type="button" class="btn btn-primary" onclick="postForm('/api/queries/es','form-es','查询已保存')">保存</button>
       </div>
     </form>
@@ -173,13 +229,166 @@
 
 {% block scripts %}
 <script>
-function editProm(q){
-  fillForm('form-prom', q);
-  openModal('modal-prom');
+const _CFG = {{ export_data_json | default('{}') | safe }};
+let importData = null;
+
+function toggleAll(type, checked){
+  document.querySelectorAll('.chk-'+type).forEach(cb => cb.checked = checked);
 }
-function editES(q){
-  fillForm('form-es', {...q, ignorable: q.ignorable?'true':'false'});
-  openModal('modal-es');
+
+function _downloadJSON(obj, filename){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+async function doExport(){
+  // 直接从API获取最新配置
+  try{
+    const r = await fetch('/api/config/export');
+    if(!r.ok){ alert('获取配置失败：' + r.status); return; }
+    var data = await r.json();
+  }catch(e){ alert('获取配置失败：' + e); return; }
+  
+  const out = {};
+  const checkedProm = [...document.querySelectorAll('.chk-prom:checked')].map(cb=>cb.value);
+  if(document.getElementById('exp-prom').checked && data.prometheus){
+    out.prometheus = {...data.prometheus};
+    if(checkedProm.length > 0)
+      out.prometheus.queries = (data.prometheus.queries||[]).filter(q=>checkedProm.includes(q.name));
+  }
+  const checkedES = [...document.querySelectorAll('.chk-es:checked')].map(cb=>cb.value);
+  if(document.getElementById('exp-es').checked && data.elasticsearch){
+    out.elasticsearch = {...data.elasticsearch};
+    if(checkedES.length > 0)
+      out.elasticsearch.queries = (data.elasticsearch.queries||[]).filter(q=>checkedES.includes(q.name));
+  }
+  if(document.getElementById('exp-sites').checked && data.sites)
+    out.sites = data.sites;
+  _downloadJSON(out, '巡检配置_' + new Date().toISOString().slice(0,10) + '.json');
+  closeModal('modal-export');
+}
+
+function downloadTemplate(){
+  const tpl = {
+    prometheus: { queries: [{
+      name: "cpu_usage",
+      promql: '100 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))*100',
+      threshold: 80, unit: "%", anomaly_when: "gt",
+      description: "CPU 使用率", faq: "1. 检查高 CPU 进程\n2. 联系 DBA"
+    }]},
+    elasticsearch: { queries: [{
+      name: "app_errors",
+      index: "logstash-*", query_string: 'level:ERROR',
+      time_range_hours: 24, size: 50, ignorable: false,
+      description: "应用错误日志", faq: "检查应用日志"
+    }]},
+    sites: [{ label: "示例机房", prometheus_url: "http://prometheus:9090", es_url: null }]
+  };
+  _downloadJSON(tpl, '巡检配置模板.json');
+}
+document.getElementById('importFile').addEventListener('change', async function(){
+  const file = this.files[0];
+  if(!file) return;
+  const text = await file.text();
+  try{
+    importData = JSON.parse(text);
+    let info = [];
+    if(importData.prometheus?.queries) info.push('Prometheus: ' + importData.prometheus.queries.length + '条');
+    if(importData.elasticsearch?.queries) info.push('ES查询: ' + importData.elasticsearch.queries.length + '条');
+    if(importData.sites) info.push('机房: ' + importData.sites.length + '个');
+    document.getElementById('importPreview').textContent = info.join(' | ') || '空文件';
+  }catch(e){ document.getElementById('importPreview').textContent = '文件格式错误'; importData = null; }
+});
+async function doImport(){
+  if(!importData){ alert('请先选择文件'); return; }
+  const r = await fetch('/api/config/import', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      data: importData,
+      prom: document.getElementById('imp-prom').checked,
+      es: document.getElementById('imp-es').checked,
+      sites: document.getElementById('imp-sites').checked
+    })
+  });
+  if(r.ok){ alert('导入成功'); location.reload(); }
+  else{ const e = await r.json(); alert('导入失败: '+(e.detail||r.status)); }
+}
+async function testProm(){
+  const promql = document.getElementById('form-prom').elements.promql.value;
+  if(!promql){ alert('请先填写 PromQL'); return; }
+  const res = document.getElementById('prom-test-result');
+  res.style.cssText='display:block;background:#f1f5f9;color:#374151';
+  res.textContent='⏳ 测试中...';
+  const fd = new FormData(); fd.append('promql', promql);
+  const r = await fetch('/api/test/prom',{method:'POST',body:fd});
+  const d = await r.json();
+  if(d.ok){
+    let txt = `✅ 查询成功，共 ${d.count} 个时序`;
+    if(d.samples && d.samples.length)
+      txt += '：' + d.samples.map(s=>`${s.instance||'(无实例)'}=${parseFloat(s.value).toFixed(3)}`).join(' | ');
+    res.style.cssText='display:block;background:#f0fdf4;color:#16a34a';
+    res.textContent=txt;
+  }else{
+    res.style.cssText='display:block;background:#fef2f2;color:#dc2626';
+    res.textContent='❌ ' + d.error;
+  }
+}
+
+async function testES(){
+  const form = document.getElementById('form-es');
+  const index = form.elements.index.value;
+  const qs = form.elements.query_string.value;
+  const hours = form.elements.time_range_hours.value || 24;
+  if(!index||!qs){ alert('请先填写索引和查询关键字'); return; }
+  const res = document.getElementById('es-test-result');
+  res.style.cssText='display:block;background:#f1f5f9;color:#374151';
+  res.textContent='⏳ 测试中...';
+  const fd = new FormData(); fd.append('index',index); fd.append('query_string',qs); fd.append('time_range_hours',hours);
+  const r = await fetch('/api/test/es',{method:'POST',body:fd});
+  const d = await r.json();
+  if(d.ok){
+    res.style.cssText='display:block;background:#f0fdf4;color:#16a34a';
+    res.textContent=`✅ 查询成功，命中 ${d.total} 条（近 ${hours}h）`;
+  }else{
+    res.style.cssText='display:block;background:#fef2f2;color:#dc2626';
+    res.textContent='❌ ' + d.error;
+  }
+}
+
+function editFromAttr(btn){
+  const data = {};
+  for(const attr of btn.attributes){
+    if(attr.name.startsWith('data-')){
+      data[attr.name.slice(5)] = attr.value;
+    }
+  }
+  if(data.type === 'prom'){
+    fillForm('form-prom', data);
+    openModal('modal-prom');
+  }else{
+    fillForm('form-es', data);
+    openModal('modal-es');
+  }
+}
+function copyFromAttr(btn, origName){
+  const data = {};
+  for(const attr of btn.attributes){
+    if(attr.name.startsWith('data-')){
+      data[attr.name.slice(5)] = attr.value;
+    }
+  }
+  data.name = origName + '_copy';
+  if(data.type === 'prom'){
+    fillForm('form-prom', data);
+    openModal('modal-prom');
+  }else{
+    fillForm('form-es', data);
+    openModal('modal-es');
+  }
 }
 </script>
 {% endblock %}

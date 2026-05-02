@@ -418,6 +418,60 @@ SSE 消息关键词 → 步骤映射
 
 ---
 
+## Demo-8 · 指标管理增强 + 报告优化
+
+**日期**：2026-05-02  
+**状态**：✅ 完成
+
+### 背景
+
+Web UI 需要四项增强：巡检指标导入导出全选/多选；报告自动归档天数可配置；添加指标时在线验证；报告指标表增加说明列。
+
+### 完成内容
+
+| 模块 | 变更 | 说明 |
+|---|---|---|
+| `src/web/templates/queries.html` | 指标表头新增全选复选框，每行新增勾选列 | 导出时若有勾选项则仅导出勾选的 queries，否则导出全部 |
+| `src/web/templates/queries.html` | 新增「📄 配置模板」按钮 | 下载标准格式 JSON 模板，引导用户按正确格式填写再导入 |
+| `src/web/templates/queries.html` | Prom / ES 编辑 Modal 各新增「🧪 在线测试」按钮 | 调用后端测试接口，即时展示结果：Prometheus 显示时序数量+样本值，ES 显示命中总数 |
+| `src/web/app.py` | 新增 `POST /api/test/prom` | 用当前配置的 Prometheus URL 执行 PromQL，返回时序数量和前 5 个样本 |
+| `src/web/app.py` | 新增 `POST /api/test/es` | 用当前配置的 ES URL 执行 ES 查询，返回命中总数 |
+| `src/web/app.py` | `api_report_settings()` 新增 `retention_days` 参数 | 保存至 `config.yaml` |
+| `src/web/app.py` | `_list_reports()` 从 config 读 `retention_days` | 动态归档，默认 7 天 |
+| `src/web/templates/reports_settings.html` | retention_days 字段改为从配置读取 | 可在 Web UI 直接调整保留天数并保存 |
+| `src/config.py` | `ReportConfig` 新增 `retention_days: int = 7` | load_config 解析 `report.retention_days` |
+| `src/collectors/prometheus.py` | `PromResult` 新增 `description: str = ""` | — |
+| `src/collectors/prometheus_range.py` | `PromRangeResult` 新增 `description: str = ""` | — |
+| `src/collectors/elasticsearch.py` | `ESResult` 新增 `description: str = ""` | — |
+| `src/reporter.py` | 注入 description 到各 Result 对象 | 与 faq 注入逻辑相同，按 name 匹配 |
+| `templates/report.html.j2` | Prom 快照表新增「说明」第一列；range 模式指标名右侧显示说明；ES 块显示说明 | — |
+| `templates/report.md.j2` | Prom 快照表新增说明列；range 模式指标名后附说明；ES heading 后附说明 | — |
+
+### 在线测试流程
+
+```
+用户在「添加/编辑」Modal 中填写 PromQL / ES 查询
+  → 点「🧪 在线测试」
+  → 前端 POST /api/test/prom 或 /api/test/es
+  → 后端用 config.yaml 中的连接信息执行实际查询
+  → 返回结果显示在按钮上方：
+      Prom: ✅ 查询成功，共 N 个时序：instance1=0.123 | instance2=0.456
+      ES:   ✅ 查询成功，命中 N 条（近 24h）
+      失败: ❌ 错误信息
+```
+
+### 多选导出规则
+
+```
+Prom 表有勾选 → 仅导出勾选行的 prometheus.queries
+Prom 表无勾选 → 导出全部 prometheus.queries
+ES  表有勾选 → 仅导出勾选行的 elasticsearch.queries
+ES  表无勾选 → 导出全部 elasticsearch.queries
+机房配置按原有章节复选框控制
+```
+
+---
+
 ## 待开发（下一步）
 
 | 优先级 | 内容 |

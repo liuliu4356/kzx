@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}巡检设置{% endblock %}
+{% block content %}
+<h1 class="page-title">⚙️ 巡检设置</h1>
+
+{% set rpt = raw.get('report',{}) %}
+{% set insp = raw.get('inspection',{}) %}
+
+<div class="card">
+  <div class="card-title">报告设置</div>
+  <form id="form-report">
+    <div class="form-row">
+      <div class="form-group">
+        <label>报告输出目录</label>
+        <input name="output_dir" value="{{ rpt.get('output_dir','reports') }}">
+      </div>
+      <div class="form-group">
+        <label>报告保留天数</label>
+        <input name="retention_days" type="number" value="{{ rpt.get('retention_days', 7) }}" min="1">
+        <div class="form-hint">自动清理超过此天数的报告（0 = 永不清理）</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>报告语言</label>
+        <select name="language">
+          <option value="zh-CN" {% if rpt.get('language')=='zh-CN' %}selected{% endif %}>中文</option>
+          <option value="en-US" {% if rpt.get('language')=='en-US' %}selected{% endif %}>English</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>时间段采样步长（分钟）</label>
+        <input type="number" value="{{ insp.get('step_minutes',5) }}">
+        <div class="form-hint">在 config.yaml 中修改 inspection.step_minutes</div>
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/report','form-report','设置已保存')">保存</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-title">自动清理</div>
+  <div class="alert alert-info">系统会在每次查看报告列表时自动清理超过保留天数的报告文件。</div>
+  <p class="text-muted">当前保留天数: {{ rpt.get('retention_days', 7) }} 天（每次打开报告列表时自动触发清理）</p>
+</div>
+{% endblock %}

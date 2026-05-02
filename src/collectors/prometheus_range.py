@@ -32,6 +32,7 @@ class PromRangeResult:
     anomaly_windows: list[AnomalyWindow] = field(default_factory=list)
     error: str | None = None
     faq: str = ""
+    description: str = ""
 
     @property
     def is_anomaly(self) -> bool:

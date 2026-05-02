@@ -21,6 +21,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
              transition: background .15s; }
 .sidebar a:hover, .sidebar a.active { background: #334155; color: #fff; }
 .sidebar .icon { width: 18px; text-align: center; }
+.sidebar .submenu { padding-left: 1rem; display: none; }
+.sidebar .menu-group.active > .submenu { display: block; }
+.sidebar .submenu a { padding:.5rem 1.25rem; font-size:.8125rem; }
 
 /* Main */
 .main { flex: 1; padding: 1.5rem; overflow-y: auto; }

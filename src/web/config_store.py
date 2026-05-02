@@ -17,7 +17,10 @@ def _load_raw() -> dict:
             shutil.copy(example, CONFIG_PATH)
         else:
             return {}
-    return yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    try:
+        return yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8")) or {}
+    except UnicodeDecodeError:
+        return yaml.safe_load(CONFIG_PATH.read_text(encoding="gbk")) or {}
 
 
 def _save_raw(data: dict) -> None:
@@ -34,14 +37,18 @@ def get_all() -> dict:
 # ── Sites ──────────────────────────────────────────────────────────────────
 
 def list_sites() -> list[dict]:
-    return _load_raw().get("sites", [])
+    raw = _load_raw()
+    # 兼容 datacenters 和 sites 两种字段名
+    return raw.get("sites") or raw.get("datacenters", [])
 
 
 def save_site(site: dict) -> None:
     raw = _load_raw()
-    sites: list[dict] = raw.setdefault("sites", [])
+    # 兼容 datacenters 和 sites
+    key = "datacenters" if "datacenters" in raw else "sites"
+    sites: list[dict] = raw.setdefault(key, [])
     for i, s in enumerate(sites):
-        if s["label"] == site["label"]:
+        if s.get("label") == site.get("label") or s.get("name") == site.get("name"):
             sites[i] = site
             _save_raw(raw)
             return
@@ -51,9 +58,11 @@ def save_site(site: dict) -> None:
 
 def delete_site(label: str) -> bool:
     raw = _load_raw()
-    before = len(raw.get("sites", []))
-    raw["sites"] = [s for s in raw.get("sites", []) if s["label"] != label]
-    if len(raw["sites"]) < before:
+    key = "datacenters" if "datacenters" in raw else "sites"
+    sites = raw.get(key, [])
+    before = len(sites)
+    raw[key] = [s for s in sites if s.get("label") != label and s.get("name") != label]
+    if len(raw[key]) < before:
         _save_raw(raw)
         return True
     return False

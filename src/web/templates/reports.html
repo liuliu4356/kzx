@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% block title %}报告历史{% endblock %}
+{% block title %}巡检报告历史{% endblock %}
 {% block content %}
-<h1 class="page-title">📋 报告历史</h1>
+<div class="tabs">
+  <a href="/" class="{% if active=='home' %}active{% endif %}" data-tab="home">巡检报告历史</a>
+  <a href="/reports/settings" class="{% if active=='settings' %}active{% endif %}" data-tab="settings">巡检设置</a>
+</div>
+<h1 class="page-title">📋 巡检报告历史</h1>
 {% if reports %}
 <div class="card" style="padding:0;overflow:hidden">
   <table>
@@ -13,7 +17,11 @@
       <td>{% if r.name.endswith('.html') %}<span class="badge badge-ok">HTML</span>{% else %}<span class="badge badge-gray">MD</span>{% endif %}</td>
       <td class="text-muted">{{ r.size_kb }} KB</td>
       <td class="text-muted">{{ r.mtime }}</td>
-      <td><a class="btn btn-outline btn-sm" href="/reports/view/{{ r.name }}" target="_blank">查看</a></td>
+      <td class="actions">
+        <a class="btn btn-outline btn-sm" href="/reports/view/{{ r.name }}" target="_blank">查看</a>
+        <a class="btn btn-outline btn-sm" href="/reports/download/{{ r.name }}">下载</a>
+        <button class="btn btn-danger btn-sm" onclick="del('/api/reports/{{ r.name }}','确定删除报告「{{ r.name }}」？',true)">删除</button>
+      </td>
     </tr>
     {% endfor %}
     </tbody>

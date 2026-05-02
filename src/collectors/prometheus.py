@@ -19,6 +19,7 @@ class PromResult:
     error: str | None
     timestamp: str
     faq: str = ""
+    description: str = ""
 
 
 def _is_anomaly(value: float, threshold: float, anomaly_when: str) -> bool:

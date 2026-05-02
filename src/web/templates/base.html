@@ -13,11 +13,43 @@
   <a href="/sites" class="{% if active=='sites' %}active{% endif %}"><span class="icon">🏢</span> 机房管理</a>
   <a href="/queries" class="{% if active=='queries' %}active{% endif %}"><span class="icon">📊</span> 巡检指标</a>
   <a href="/settings" class="{% if active=='settings' %}active{% endif %}"><span class="icon">⚙️</span> 系统设置</a>
-  <a href="/reports" class="{% if active=='reports' %}active{% endif %}"><span class="icon">📋</span> 报告历史</a>
+  <div class="menu-group {% if active=='reports' %}active{% endif %}">
+    <a href="/reports"><span class="icon">📋</span> 巡检报告</a>
+    <div class="submenu">
+      <a href="/reports" class="{% if active=='reports' and subtab!='settings' %}active{% endif %}">巡检报告历史</a>
+      <a href="/reports/settings" class="{% if subtab=='settings' %}active{% endif %}">巡检设置</a>
+    </div>
+  </div>
+  <div style="flex:1"></div>
+  <a href="#" onclick="openModal('modal-about');return false" class="{% if active=='about' %}active{% endif %}"><span class="icon">👤</span> 关于作者</a>
 </nav>
 <main class="main">
   {% block content %}{% endblock %}
 </main>
+
+<!-- 关于作者 Modal -->
+<div class="modal-backdrop" id="modal-about" onclick="if(event.target===this)closeModal('modal-about')">
+  <div class="modal">
+    <div class="modal-title">👤 关于作者</div>
+    <div style="padding:1rem 0;line-height:1.8">
+      <p><strong>作者：</strong>三思</p>
+      <p><strong>身份：</strong>运维工程师，专注自动化巡检、监控系统建设</p>
+      <p><strong>理念：</strong>让运维更简单，让告警更精准</p>
+      <p><strong>技能：</strong>Python / Go / Prometheus / ELK / Grafana</p>
+      <hr style="margin:1rem 0;border:none;border-top:1px solid #eee">
+      <p><strong>项目介绍：</strong></p>
+      <p style="color:#666">X项目监控系统是一套面向多数据中心的自动化巡检解决方案，支持Prometheus指标监控、ES日志分析、异常检测与报告生成。</p>
+      <hr style="margin:1rem 0;border:none;border-top:1px solid #eee">
+      <p><strong>GitHub：</strong></p>
+      <p><a href="https://github.com/liuliu4356/kzx" target="_blank" style="color:#0366d6">https://github.com/liuliu4356/kzx</a></p>
+      <p style="font-size:.85rem;color:#888">欢迎Star⭐️ 和 Fork！</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-about')">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }

@@ -25,7 +25,7 @@
 ### Prometheus 指标（时间段统计）
 
 {% for r in s.prom_range_results -%}
-#### {% if r.is_anomaly %}🔴 {% endif %}{{ r.name }}
+#### {% if r.is_anomaly %}🔴 {% endif %}{{ r.name }}{% if r.description %} — _{{ r.description }}_{% endif %}
 
 {% if r.error -%}
 > ⚠️ 采集错误: `{{ r.error }}`
@@ -51,10 +51,10 @@
 {# ═══════════════════ 快照模式 ═══════════════════ #}
 ### Prometheus 指标
 
-| 指标 | 值 | 阈值 | 状态 | 错误 |
-|---|---|---|---|---|
+| 说明 | 指标 | 值 | 阈值 | 状态 | 错误 |
+|---|---|---|---|---|---|
 {% for r in s.prom_results -%}
-| {{ r.name }} | {{ "%.3f"|format(r.value) ~ r.unit if r.value is not none else "—" }} | {{ r.threshold }}{{ r.unit }} | {{ "⚠️ 异常" if r.is_anomaly else ("— 无数据" if r.value is none else "✅ 正常") }} | {{ r.error or "" }} |
+| {{ r.description or "—" }} | {{ r.name }} | {{ "%.3f"|format(r.value) ~ r.unit if r.value is not none else "—" }} | {{ r.threshold }}{{ r.unit }} | {{ "⚠️ 异常" if r.is_anomaly else ("— 无数据" if r.value is none else "✅ 正常") }} | {{ r.error or "" }} |
 {% endfor %}
 
 {% endif %}
@@ -62,7 +62,7 @@
 ### Elasticsearch 日志
 
 {% for r in s.es_results -%}
-#### {{ r.name }}{% if r.ignorable %} _(已知/可忽略)_{% endif %} (`{{ r.index }}`)
+#### {{ r.name }}{% if r.description %} — _{{ r.description }}_{% endif %}{% if r.ignorable %} _(已知/可忽略)_{% endif %} (`{{ r.index }}`)
 
 - 查询: `{{ r.query_string | trim }}`
 - 命中总数: **{{ r.total }}**{% if r.ignorable %} — 已知噪音，不计入健康评分{% endif %}{% if kibana_url and r.total > 0 %} · [🔗 Kibana 查看]({{ kibana_url }}/app/discover#/?_g=(time:(from:now-{{ r.time_range_hours }}h,to:now))&_a=(query:(language:lucene,query:'{{ r.query_string | urlencode }}'))){% endif %}
