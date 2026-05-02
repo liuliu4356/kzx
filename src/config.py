@@ -46,6 +46,7 @@ class ESConfig:
     password_env: str | None
     timeout_sec: int
     queries: list[ESQuery]
+    kibana_url: str = ""   # Kibana Discover 地址，用于报告中生成跳转链接
 
 
 @dataclass
@@ -148,6 +149,7 @@ def load_config(path: str | Path) -> Config:
         username_env=e.get("username_env"),
         password_env=e.get("password_env"),
         timeout_sec=int(e.get("timeout_sec", 10)),
+        kibana_url=e.get("kibana_url", ""),
         queries=[
             ESQuery(
                 name=q["name"],

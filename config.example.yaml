@@ -77,6 +77,7 @@ elasticsearch:
   url: http://localhost:9200
   username_env: ES_USERNAME
   password_env: ES_PASSWORD
+  kibana_url: http://localhost:5601   # 可选，配置后报告中 ES 结果自动生成 Kibana 跳转链接
   timeout_sec: 10
   queries:
 

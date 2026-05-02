@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
+from urllib.parse import quote as _urlquote
+
 from jinja2 import Environment, FileSystemLoader
 
 from .collectors import SiteResult
@@ -21,6 +23,7 @@ def render(
     fmt: Literal["md", "html"] = "md",
 ) -> Path:
     env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=False)
+    env.filters["urlencode"] = lambda s: _urlquote(str(s), safe="")
     template_name = "report.html.j2" if fmt == "html" else "report.md.j2"
     tmpl = env.get_template(template_name)
 
@@ -58,6 +61,7 @@ def render(
         site_results=site_results,
         total_anomaly_count=total_anomaly_count,
         ai_analysis=ai_analysis,
+        kibana_url=cfg.elasticsearch.kibana_url.rstrip("/"),
     )
 
     output_dir = Path(cfg.report.output_dir)

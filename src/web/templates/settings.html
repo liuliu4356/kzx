@@ -57,6 +57,11 @@
           <label>超时（秒）</label>
           <input name="timeout_sec" type="number" value="{{ es.get('timeout_sec',10) }}">
         </div>
+        <div class="form-group">
+          <label>Kibana 地址（可选）</label>
+          <input name="kibana_url" value="{{ es.get('kibana_url','') }}" placeholder="http://localhost:5601">
+          <div class="form-hint">配置后，报告中 ES 日志结果会生成 Kibana Discover 跳转链接</div>
+        </div>
         <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/elasticsearch','form-es-url')">保存</button>
       </form>
     </div>

@@ -10,6 +10,10 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from . import config_store as cs
+from jinja2 import Environment, FileSystemLoader
+from dotenv import load_dotenv
+import json
 
 app = FastAPI(title="GDB 巡检系统")
 
@@ -17,6 +21,14 @@ _WEB_DIR = Path(__file__).parent
 _PROJ_ROOT = _WEB_DIR.parent.parent
 
 app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
+
+# Use direct Jinja2 to avoid Starlette template caching issue
+jinja_env = Environment(loader=FileSystemLoader(str(_WEB_DIR / "templates")))
+
+def render_template(name: str, context: dict) -> HTMLResponse:
+    template = jinja_env.get_template(name)
+    return HTMLResponse(template.render(**context))
+
 templates = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
 
 
@@ -24,53 +36,34 @@ templates = Jinja2Templates(directory=str(_WEB_DIR / "templates"))
 
 @app.get("/", response_class=HTMLResponse)
 async def page_index(request: Request):
-    import json
     raw = cs.get_all()
-    reports = _list_reports()
-    raw_json = json.dumps(raw, default=str, ensure_ascii=False)
-    reports_json = json.dumps(reports[:10], default=str, ensure_ascii=False)
-    return templates.TemplateResponse("index.html", {
-        "request": request, "raw": raw_json, "reports": reports_json,
-    })
+    reports = _list_reports()[:10]
+    return render_template("index.html", {"raw": raw, "reports": reports})
 
 
 @app.get("/sites", response_class=HTMLResponse)
 async def page_sites(request: Request):
-    import json
-    sites_json = json.dumps(cs.list_sites(), default=str, ensure_ascii=False)
-    return templates.TemplateResponse("sites.html", {
-        "request": request, "sites": sites_json,
-    })
+    sites = cs.list_sites()
+    return render_template("sites.html", {"sites": sites})
 
 
 @app.get("/queries", response_class=HTMLResponse)
 async def page_queries(request: Request):
-    import json
-    prom_json = json.dumps(cs.list_prom_queries(), default=str, ensure_ascii=False)
-    es_json = json.dumps(cs.list_es_queries(), default=str, ensure_ascii=False)
-    return templates.TemplateResponse("queries.html", {
-        "request": request,
-        "prom_queries": prom_json,
-        "es_queries": es_json,
-    })
+    prom_queries = cs.list_prom_queries()
+    es_queries = cs.list_es_queries()
+    return render_template("queries.html", {"prom_queries": prom_queries, "es_queries": es_queries})
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def page_settings(request: Request):
-    import json
-    raw_json = json.dumps(cs.get_all(), default=str, ensure_ascii=False)
-    return templates.TemplateResponse("settings.html", {
-        "request": request, "raw": raw_json,
-    })
+    raw = cs.get_all()
+    return render_template("settings.html", {"raw": raw})
 
 
 @app.get("/reports", response_class=HTMLResponse)
 async def page_reports(request: Request):
-    import json
-    reports_json = json.dumps(_list_reports(), default=str, ensure_ascii=False)
-    return templates.TemplateResponse("reports.html", {
-        "request": request, "reports": reports_json,
-    })
+    reports = _list_reports()
+    return render_template("reports.html", {"reports": reports})
 
 
 # ── API: Sites ─────────────────────────────────────────────────────────────
@@ -169,8 +162,9 @@ async def api_es_settings(
     username_env: str = Form(""),
     password_env: str = Form(""),
     timeout_sec: int = Form(10),
+    kibana_url: str = Form(""),
 ):
-    cs.save_es_url(url, username_env, password_env, timeout_sec)
+    cs.save_es_url(url, username_env, password_env, timeout_sec, kibana_url)
     return JSONResponse({"ok": True})
 
 

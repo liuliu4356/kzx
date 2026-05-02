@@ -58,6 +58,20 @@
       <button class="btn btn-primary" onclick="runInspect()">🚀 开始巡检</button>
     </div>
   </div>
+
+  <!-- 4-step progress bar -->
+  <div id="steps" style="display:none;margin:1rem 0 .5rem">
+    <div style="display:flex;gap:0;align-items:stretch">
+      <div class="step-item" id="step-1" data-label="⚙️ 加载配置"></div>
+      <div class="step-sep">›</div>
+      <div class="step-item" id="step-2" data-label="📡 采集数据"></div>
+      <div class="step-sep">›</div>
+      <div class="step-item" id="step-3" data-label="🤖 AI 分析"></div>
+      <div class="step-sep">›</div>
+      <div class="step-item" id="step-4" data-label="📄 生成报告"></div>
+    </div>
+  </div>
+
   <div id="log-box"></div>
   <div id="report-link" style="display:none;margin-top:.75rem"></div>
 </div>
@@ -83,12 +97,44 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.step-item{flex:1;text-align:center;padding:.4rem .5rem;font-size:.8125rem;font-weight:500;
+           background:var(--gray-light);color:var(--gray);border-radius:0;transition:all .2s;}
+.step-item:first-child{border-radius:var(--radius) 0 0 var(--radius);}
+.step-item:last-child {border-radius:0 var(--radius) var(--radius) 0;}
+.step-item.active{background:var(--blue-light);color:var(--blue);}
+.step-item.done  {background:var(--green-light);color:var(--green);}
+.step-item.error {background:var(--red-light);color:var(--red);}
+.step-sep{display:flex;align-items:center;color:var(--border);font-size:1.1rem;padding:0 .1rem;background:transparent;}
+</style>
 <script>
 function toggleCustom(){
   const v = document.getElementById('period').value;
   document.getElementById('start-wrap').style.display = v==='custom'?'block':'none';
   document.getElementById('end-wrap').style.display  = v==='custom'?'block':'none';
 }
+
+// Steps: 1=加载配置, 2=采集数据, 3=AI分析, 4=生成报告
+function initSteps(){
+  for(let i=1;i<=4;i++){
+    const el=document.getElementById('step-'+i);
+    el.className='step-item'; el.textContent=el.dataset.label;
+  }
+  document.getElementById('steps').style.display='block';
+}
+function setStep(n, state){
+  const el=document.getElementById('step-'+n);
+  el.className='step-item '+state;
+  el.textContent=(state==='active'?'⏳ ':state==='done'?'✅ ':state==='error'?'❌ ':'') + el.dataset.label.replace(/^[^ ]+ /,'');
+}
+function msgToStep(msg){
+  if(msg.includes('加载配置')) return 1;
+  if(msg.includes('采集')) return 2;
+  if(msg.includes('AI 分析')) return 3;
+  if(msg.includes('生成报告')) return 4;
+  return 0;
+}
+
 async function runInspect(){
   const period = document.getElementById('period').value;
   const fmt    = document.getElementById('fmt').value;
@@ -96,14 +142,16 @@ async function runInspect(){
   const logBox = document.getElementById('log-box');
   const linkBox= document.getElementById('report-link');
   logBox.innerHTML=''; logBox.className='visible'; linkBox.style.display='none';
+  initSteps();
+  let currentStep=0;
 
   const fd = new FormData();
   fd.append('period', period==='custom'?'instant':period);
   fd.append('fmt', fmt);
   fd.append('skip_llm', skipLlm);
   if(period==='custom'){
-    fd.append('start', document.getElementById('range-start').value.replace('T','T'));
-    fd.append('end',   document.getElementById('range-end').value.replace('T','T'));
+    fd.append('start', document.getElementById('range-start').value);
+    fd.append('end',   document.getElementById('range-end').value);
   }
 
   const resp = await fetch('/api/inspect',{method:'POST',body:fd});
@@ -120,12 +168,20 @@ async function runInspect(){
       const msg = line.slice(5).trim();
       if(msg.startsWith('DONE:')){
         const fname = msg.slice(5);
+        for(let i=1;i<=4;i++) setStep(i,'done');
         linkBox.innerHTML=`<a class="btn btn-success" href="/reports/view/${fname}" target="_blank">📄 查看报告：${fname}</a>`;
         linkBox.style.display='block';
         logBox.innerHTML += `<span class="log-ok">✅ 完成！</span>\n`;
       } else if(msg.startsWith('ERROR:')){
+        if(currentStep>0) setStep(currentStep,'error');
         logBox.innerHTML += `<span class="log-err">❌ ${msg.slice(6)}</span>\n`;
       } else {
+        const step = msgToStep(msg);
+        if(step>0){
+          if(currentStep>0 && currentStep!==step) setStep(currentStep,'done');
+          currentStep=step;
+          setStep(step,'active');
+        }
         logBox.innerHTML += `<span class="log-info">${msg}</span>\n`;
       }
       logBox.scrollTop = logBox.scrollHeight;

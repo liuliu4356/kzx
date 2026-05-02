@@ -132,12 +132,14 @@ def save_prometheus_url(url: str, timeout_sec: int) -> None:
     _save_raw(raw)
 
 
-def save_es_url(url: str, username_env: str, password_env: str, timeout_sec: int) -> None:
+def save_es_url(url: str, username_env: str, password_env: str, timeout_sec: int,
+                kibana_url: str = "") -> None:
     raw = _load_raw()
     raw.setdefault("elasticsearch", {}).update({
         "url": url,
         "username_env": username_env,
         "password_env": password_env,
         "timeout_sec": timeout_sec,
+        "kibana_url": kibana_url,
     })
     _save_raw(raw)

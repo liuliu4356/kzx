@@ -65,7 +65,7 @@
 #### {{ r.name }}{% if r.ignorable %} _(已知/可忽略)_{% endif %} (`{{ r.index }}`)
 
 - 查询: `{{ r.query_string | trim }}`
-- 命中总数: **{{ r.total }}**{% if r.ignorable %} — 已知噪音，不计入健康评分{% endif %}
+- 命中总数: **{{ r.total }}**{% if r.ignorable %} — 已知噪音，不计入健康评分{% endif %}{% if kibana_url and r.total > 0 %} · [🔗 Kibana 查看]({{ kibana_url }}/app/discover#/?_g=(time:(from:now-{{ r.time_range_hours }}h,to:now))&_a=(query:(language:lucene,query:'{{ r.query_string | urlencode }}'))){% endif %}
 {% if r.error %}- 错误: `{{ r.error }}`{% endif %}
 
 {% if r.hits and not r.ignorable -%}

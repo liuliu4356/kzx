@@ -370,6 +370,54 @@ python -m src.main inspect --period 1d --format html
 
 ---
 
+## Demo-7 · Web 进度可视化 + Kibana 跳转链接
+
+**日期**：2026-05-02  
+**状态**：✅ 完成
+
+### 背景
+
+Web 页面「开始巡检」只有滚动日志，用户无法一眼判断当前在哪个阶段；ES 日志结果需要手动去 Kibana 查询，操作繁琐。
+
+### 完成内容
+
+| 模块 | 变更 | 说明 |
+|---|---|---|
+| `src/web/templates/index.html` | 新增 4 步进度条 | ⚙️ 加载配置 → 📡 采集数据 → 🤖 AI 分析 → 📄 生成报告，SSE 消息驱动状态切换（pending/active/done/error） |
+| `src/config.py` | `ESConfig` 新增 `kibana_url` 字段 | 默认空字符串，`load_config()` 读取 `elasticsearch.kibana_url` |
+| `src/collectors/elasticsearch.py` | `ESResult` 新增 `time_range_hours` 字段 | 从 `ESQuery` 传播，用于构造 Kibana 时间范围参数 |
+| `src/reporter.py` | 注册 `urlencode` Jinja2 过滤器，传入 `kibana_url` | 使用 `urllib.parse.quote` 对 ES 查询字符串编码 |
+| `templates/report.html.j2` | ES 块新增 Kibana 跳转链接 | `r.total > 0` 且 `kibana_url` 已配置时显示「🔗 Kibana」链接 |
+| `templates/report.md.j2` | ES 命中行新增 Kibana Markdown 链接 | 格式：`[🔗 Kibana 查看](URL)` |
+| `src/web/templates/settings.html` | ES 设置表单新增 Kibana 地址输入框 | 含 form-hint 说明 |
+| `src/web/config_store.py` | `save_es_url()` 新增 `kibana_url` 参数 | 写入 `elasticsearch.kibana_url` |
+| `src/web/app.py` | `/api/settings/elasticsearch` 新增 `kibana_url` 表单字段 | 透传至 `save_es_url()` |
+| `config.example.yaml` | ES 节新增 `kibana_url` 示例 | `http://localhost:5601` |
+
+### Kibana 跳转链接格式
+
+```
+{kibana_url}/app/discover#/?_g=(time:(from:now-{hours}h,to:now))&_a=(query:(language:lucene,query:'{url_encoded_query}'))
+```
+
+- 时间范围：取该 ES 查询配置的 `time_range_hours`
+- 查询语言：Lucene（与 ES 采集一致）
+- 查询字符串：`urllib.parse.quote(query, safe='')` 编码
+
+### 4 步进度条逻辑
+
+```
+SSE 消息关键词 → 步骤映射
+  "加载配置"  → step 1 active
+  "采集"      → step 1 done, step 2 active
+  "AI 分析"   → step 2 done, step 3 active
+  "生成报告"  → step 3 done, step 4 active
+  DONE:xxx    → 所有步骤 done，显示报告链接
+  ERROR:xxx   → 当前步骤 error（红色）
+```
+
+---
+
 ## 待开发（下一步）
 
 | 优先级 | 内容 |

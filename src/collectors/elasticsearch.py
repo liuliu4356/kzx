@@ -26,6 +26,7 @@ class ESResult:
     error: str | None
     ignorable: bool = False
     faq: str = ""
+    time_range_hours: int = 24  # 用于构造 Kibana 跳转链接的时间范围
 
 
 def _build_body(q: ESQuery) -> dict:
@@ -86,4 +87,5 @@ def collect(cfg: ESConfig) -> list[ESResult]:
         results = [_query_one(client, cfg.url, q, auth) for q in cfg.queries]
     for result, query in zip(results, cfg.queries):
         result.ignorable = query.ignorable
+        result.time_range_hours = query.time_range_hours
     return results
