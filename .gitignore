@@ -1,11 +1,38 @@
-.env
+# Python
 .venv/
 venv/
 __pycache__/
 *.pyc
 .pytest_cache/
-reports/*.md
-!reports/.gitkeep
+*.egg-info/
+.eggs/
+
+# 配置文件 (敏感)
+.env
 config.yaml
+
+# IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+
+# 报告
+reports/*.md
+!reports/.gitkeep
+
+# Docker 数据 (不提交到 Git)
+es-data/
+prometheus-data/
+grafana-data/
+logstash-data/
+prometheus-data/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log
+
+# CLAUDE.md 和 DEVLOG.md (可选)
+CLAUDE.md
+DEVLOG.md

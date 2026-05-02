@@ -5,32 +5,25 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from .collectors.elasticsearch import ESResult
-from .collectors.prometheus import PromResult
+from .collectors import SiteResult
 from .config import Config
 
 
-def render(
-    prom_results: list[PromResult],
-    es_results: list[ESResult],
-    ai_analysis: str,
-    cfg: Config,
-) -> Path:
+def render(site_results: list[SiteResult], ai_analysis: str, cfg: Config) -> Path:
     templates_dir = Path(__file__).parent.parent / "templates"
     env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=False)
     tmpl = env.get_template("report.md.j2")
 
     now = datetime.now(timezone.utc)
-    anomaly_count = sum(1 for r in prom_results if r.is_anomaly)
+    total_anomaly_count = sum(s.anomaly_count for s in site_results)
+    total_prom_count = sum(len(s.prom_results) for s in site_results)
 
     content = tmpl.render(
         generated_at=now.strftime("%Y-%m-%d %H:%M UTC"),
         model=cfg.llm.model,
-        prom_url=cfg.prometheus.url,
-        es_url=cfg.elasticsearch.url,
-        anomaly_count=anomaly_count,
-        prom_results=prom_results,
-        es_results=es_results,
+        site_results=site_results,
+        total_anomaly_count=total_anomaly_count,
+        total_prom_count=total_prom_count,
         ai_analysis=ai_analysis,
     )
 

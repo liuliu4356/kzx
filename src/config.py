@@ -32,6 +32,7 @@ class ESQuery:
     query_string: str
     time_range_hours: int
     size: int
+    ignorable: bool = False  # True 表示已知可忽略噪音，报告中标注但不计入健康评分
 
 
 @dataclass
@@ -60,6 +61,13 @@ class ReportConfig:
 
 
 @dataclass
+class SiteConfig:
+    label: str             # 机房名称，如"东坝"
+    prometheus_url: str    # 该机房 Prometheus 地址，覆盖全局 prometheus.url
+    es_url: str | None = None  # 该机房 ES 地址；None 则沿用全局 elasticsearch.url
+
+
+@dataclass
 class NotifierItem:
     type: str          # "dingtalk" | "feishu"
     webhook_env: str   # 环境变量名，值为完整 webhook URL
@@ -83,6 +91,7 @@ class Config:
     report: ReportConfig
     notifiers: list[NotifierItem] = field(default_factory=list)
     batch_windows: list[BatchWindow] = field(default_factory=list)
+    sites: list[SiteConfig] = field(default_factory=list)
 
 
 def current_batch_window(windows: list[BatchWindow]) -> BatchWindow | None:
@@ -134,6 +143,7 @@ def load_config(path: str | Path) -> Config:
                 query_string=q["query_string"],
                 time_range_hours=int(q["time_range_hours"]),
                 size=int(q["size"]),
+                ignorable=bool(q.get("ignorable", False)),
             )
             for q in e.get("queries", [])
         ],
@@ -176,8 +186,17 @@ def load_config(path: str | Path) -> Config:
         for bw in raw.get("batch_windows", [])
     ]
 
+    sites = [
+        SiteConfig(
+            label=s["label"],
+            prometheus_url=s["prometheus_url"],
+            es_url=s.get("es_url"),
+        )
+        for s in raw.get("sites", [])
+    ]
+
     return Config(prometheus=prom, elasticsearch=es, llm=llm, report=report,
-                  notifiers=notifiers, batch_windows=batch_windows)
+                  notifiers=notifiers, batch_windows=batch_windows, sites=sites)
 
 
 def get_es_auth(cfg: ESConfig) -> tuple[str, str] | None:

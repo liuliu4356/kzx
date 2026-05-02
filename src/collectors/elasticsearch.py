@@ -24,6 +24,7 @@ class ESResult:
     total: int
     hits: list[ESHit]
     error: str | None
+    ignorable: bool = False
 
 
 def _build_body(q: ESQuery) -> dict:
@@ -81,4 +82,7 @@ def _query_one(client: httpx.Client, base_url: str, q: ESQuery,
 def collect(cfg: ESConfig) -> list[ESResult]:
     auth = get_es_auth(cfg)
     with httpx.Client(timeout=cfg.timeout_sec) as client:
-        return [_query_one(client, cfg.url, q, auth) for q in cfg.queries]
+        results = [_query_one(client, cfg.url, q, auth) for q in cfg.queries]
+    for result, query in zip(results, cfg.queries):
+        result.ignorable = query.ignorable
+    return results

@@ -97,6 +97,7 @@ elasticsearch:
       query_string: '"Got packets out of order"'
       time_range_hours: 24
       size: 5
+      ignorable: true             # 标记为已知噪音，报告中标注，不计入健康评分
 
     # 组件通用错误（MDS/CM/PM/DBProxy）
     - name: component_errors
@@ -127,6 +128,17 @@ batch_windows:
       cpu_usage: 80           # 批处理期间 CPU 允许到 80%
       replication_lag_sec: 900  # 批处理期间主备延迟允许 15 分钟
       dbproxy_slow_queries: 50000  # 批处理期间慢日志激增属已知现象
+
+# 多机房配置（每个机房独立 Prometheus；ES 可复用全局或独立）
+# 若不配置 sites，则使用上方 prometheus.url / elasticsearch.url 作为单机房运行
+sites:
+  - label: 东坝
+    prometheus_url: http://dongba-prometheus:9090
+    # es_url 不填则复用全局 elasticsearch.url
+  - label: 南法信
+    prometheus_url: http://nanfaxin-prometheus:9090
+  - label: 合肥
+    prometheus_url: http://hefei-prometheus:9090
 
 # 通知渠道（可配置多个，按需删减）
 notifiers:
