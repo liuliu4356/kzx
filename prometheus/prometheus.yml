@@ -140,7 +140,7 @@ scrape_configs:
           datacenter: 合肥
           role: DBProxy
           component: proxy
-          type: auth
+          dbproxy_type: auth
           ip_range: 27.130.52.145-155
           type: dr
 
