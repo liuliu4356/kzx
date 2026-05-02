@@ -16,6 +16,8 @@ class PromQuery:
     threshold: float
     unit: str = ""
     anomaly_when: Literal["gt", "lt"] = "gt"
+    description: str = ""   # 指标说明，Web UI 展示用
+    faq: str = ""           # 异常处理 FAQ，出现异常时写入报告
 
 
 @dataclass
@@ -32,7 +34,9 @@ class ESQuery:
     query_string: str
     time_range_hours: int
     size: int
-    ignorable: bool = False  # True 表示已知可忽略噪音，报告中标注但不计入健康评分
+    ignorable: bool = False
+    description: str = ""
+    faq: str = ""
 
 
 @dataclass
@@ -131,6 +135,8 @@ def load_config(path: str | Path) -> Config:
                 threshold=float(q["threshold"]),
                 unit=q.get("unit", ""),
                 anomaly_when=q.get("anomaly_when", "gt"),
+                description=q.get("description", ""),
+                faq=q.get("faq", ""),
             )
             for q in p.get("queries", [])
         ],
@@ -150,6 +156,8 @@ def load_config(path: str | Path) -> Config:
                 time_range_hours=int(q["time_range_hours"]),
                 size=int(q["size"]),
                 ignorable=bool(q.get("ignorable", False)),
+                description=q.get("description", ""),
+                faq=q.get("faq", ""),
             )
             for q in e.get("queries", [])
         ],

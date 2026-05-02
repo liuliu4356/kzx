@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}巡检指标{% endblock %}
+{% block content %}
+<h1 class="page-title">📊 巡检指标配置</h1>
+
+<div class="tabs">
+  <div class="tab active" data-tab-group="q" data-tab="prom" onclick="switchTab('q','prom')">Prometheus 指标（{{ prom_queries|length }}）</div>
+  <div class="tab" data-tab-group="q" data-tab="es" onclick="switchTab('q','es')">ES 日志查询（{{ es_queries|length }}）</div>
+</div>
+
+<!-- Prometheus 指标 -->
+<div class="tab-pane active" data-pane-group="q" data-pane="prom">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">
+    <button class="btn btn-primary" onclick="openModal('modal-prom')">＋ 添加指标</button>
+  </div>
+  {% if prom_queries %}
+  <div class="card" style="padding:0;overflow:hidden">
+    <table>
+      <thead><tr><th>指标名</th><th>PromQL（摘要）</th><th>阈值</th><th>异常判断</th><th>说明</th><th>操作</th></tr></thead>
+      <tbody>
+      {% for q in prom_queries %}
+      <tr>
+        <td><strong>{{ q.name }}</strong></td>
+        <td><code class="truncate">{{ q.promql[:60] }}{% if q.promql|length>60 %}…{% endif %}</code></td>
+        <td>{{ q.threshold }}{{ q.unit }}</td>
+        <td>{{ '低于' if q.get('anomaly_when')=='lt' else '高于' }}阈值</td>
+        <td class="text-muted truncate">{{ q.get('description','—') }}</td>
+        <td class="actions">
+          <button class="btn btn-outline btn-sm" onclick="editProm({{ q|tojson }})">编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="del('/api/queries/prom/{{ q.name }}','删除指标「{{ q.name }}」？',true)">删除</button>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card empty"><div class="empty-icon">📊</div><p>还没有配置指标</p></div>
+  {% endif %}
+</div>
+
+<!-- ES 日志查询 -->
+<div class="tab-pane" data-pane-group="q" data-pane="es">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">
+    <button class="btn btn-primary" onclick="openModal('modal-es')">＋ 添加日志查询</button>
+  </div>
+  {% if es_queries %}
+  <div class="card" style="padding:0;overflow:hidden">
+    <table>
+      <thead><tr><th>查询名</th><th>索引</th><th>关键字</th><th>时间范围</th><th>类型</th><th>操作</th></tr></thead>
+      <tbody>
+      {% for q in es_queries %}
+      <tr>
+        <td><strong>{{ q.name }}</strong></td>
+        <td><code>{{ q.index }}</code></td>
+        <td class="truncate text-muted">{{ q.query_string[:50] }}{% if q.query_string|length>50 %}…{% endif %}</td>
+        <td>{{ q.time_range_hours }}h</td>
+        <td>{% if q.get('ignorable') %}<span class="badge badge-gray">已知噪音</span>{% else %}<span class="badge badge-ok">正常查询</span>{% endif %}</td>
+        <td class="actions">
+          <button class="btn btn-outline btn-sm" onclick="editES({{ q|tojson }})">编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="del('/api/queries/es/{{ q.name }}','删除查询「{{ q.name }}」？',true)">删除</button>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card empty"><div class="empty-icon">🔍</div><p>还没有配置日志查询</p></div>
+  {% endif %}
+</div>
+
+<!-- Modal: Prometheus -->
+<div class="modal-backdrop" id="modal-prom" onclick="if(event.target===this)closeModal('modal-prom')">
+  <div class="modal">
+    <div class="modal-title">Prometheus 指标配置</div>
+    <form id="form-prom">
+      <div class="form-row">
+        <div class="form-group">
+          <label>指标名（唯一 ID）<span style="color:red">*</span></label>
+          <input name="name" required placeholder="如：cpu_usage">
+        </div>
+        <div class="form-group">
+          <label>单位</label>
+          <input name="unit" placeholder="如：%、ms、req/s">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>PromQL 表达式 <span style="color:red">*</span></label>
+        <textarea name="promql" required placeholder="如：100 - avg(rate(node_cpu_seconds_total{mode='idle'}[5m]))*100" style="min-height:60px"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>告警阈值 <span style="color:red">*</span></label>
+          <input name="threshold" type="number" step="any" required placeholder="80">
+        </div>
+        <div class="form-group">
+          <label>异常判断方向</label>
+          <select name="anomaly_when">
+            <option value="gt">高于阈值（如 CPU %）</option>
+            <option value="lt">低于阈值（如 instance_up）</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>指标说明</label>
+        <input name="description" placeholder="如：服务器 CPU 使用率，正常应低于 10%">
+      </div>
+      <div class="form-group">
+        <label>异常处理 FAQ（出现异常时会附在报告中）</label>
+        <textarea name="faq" placeholder="1. 检查是否在批处理窗口&#10;2. 执行 top -c 查看高 CPU 进程&#10;3. 联系 DBA 确认是否有大查询"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-prom')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="postForm('/api/queries/prom','form-prom','指标已保存')">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: ES -->
+<div class="modal-backdrop" id="modal-es" onclick="if(event.target===this)closeModal('modal-es')">
+  <div class="modal">
+    <div class="modal-title">ES 日志查询配置</div>
+    <form id="form-es">
+      <div class="form-row">
+        <div class="form-group">
+          <label>查询名（唯一 ID）<span style="color:red">*</span></label>
+          <input name="name" required placeholder="如：gdb_critical_errors">
+        </div>
+        <div class="form-group">
+          <label>ES 索引 <span style="color:red">*</span></label>
+          <input name="index" required placeholder="如：logstash-gdb-*">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>查询关键字（Lucene 语法）<span style="color:red">*</span></label>
+        <textarea name="query_string" required placeholder='如："Lost connection" OR "Lock wait timeout"'></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>时间范围（小时）</label>
+          <input name="time_range_hours" type="number" value="24">
+        </div>
+        <div class="form-group">
+          <label>最多返回条数</label>
+          <input name="size" type="number" value="50">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>是否为已知可忽略噪音</label>
+        <select name="ignorable">
+          <option value="false">否 — 正常查询，计入健康评分</option>
+          <option value="true">是 — 已知噪音，仅统计不告警</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>说明</label>
+        <input name="description" placeholder="如：GDB 关键错误日志">
+      </div>
+      <div class="form-group">
+        <label>异常处理 FAQ</label>
+        <textarea name="faq" placeholder="发现此类日志时的排查步骤..."></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-es')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="postForm('/api/queries/es','form-es','查询已保存')">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editProm(q){
+  fillForm('form-prom', q);
+  openModal('modal-prom');
+}
+function editES(q){
+  fillForm('form-es', {...q, ignorable: q.ignorable?'true':'false'});
+  openModal('modal-es');
+}
+</script>
+{% endblock %}

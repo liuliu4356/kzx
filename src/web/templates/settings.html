@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}系统设置{% endblock %}
+{% block content %}
+<h1 class="page-title">⚙️ 系统设置</h1>
+
+<div class="tabs">
+  <div class="tab active" data-tab-group="s" data-tab="conn" onclick="switchTab('s','conn')">数据源连接</div>
+  <div class="tab" data-tab-group="s" data-tab="llm" onclick="switchTab('s','llm')">AI 分析</div>
+  <div class="tab" data-tab-group="s" data-tab="notify" onclick="switchTab('s','notify')">通知</div>
+  <div class="tab" data-tab-group="s" data-tab="batch" onclick="switchTab('s','batch')">批处理窗口</div>
+</div>
+
+{% set prom = raw.get('prometheus',{}) %}
+{% set es   = raw.get('elasticsearch',{}) %}
+{% set llm  = raw.get('llm',{}) %}
+{% set rpt  = raw.get('report',{}) %}
+{% set insp = raw.get('inspection',{}) %}
+{% set nots = raw.get('notifiers',[]) %}
+{% set bws  = raw.get('batch_windows',[]) %}
+
+<!-- 数据源连接 -->
+<div class="tab-pane active" data-pane-group="s" data-pane="conn">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Prometheus</div>
+      <form id="form-prom-url">
+        <div class="form-group">
+          <label>全局 Prometheus 地址</label>
+          <input name="url" value="{{ prom.get('url','http://localhost:9090') }}" required>
+          <div class="form-hint">多机房模式下可在「机房管理」覆盖此地址</div>
+        </div>
+        <div class="form-group">
+          <label>超时（秒）</label>
+          <input name="timeout_sec" type="number" value="{{ prom.get('timeout_sec',10) }}">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/prometheus','form-prom-url')">保存</button>
+      </form>
+    </div>
+    <div class="card">
+      <div class="card-title">Elasticsearch</div>
+      <form id="form-es-url">
+        <div class="form-group">
+          <label>ES 地址</label>
+          <input name="url" value="{{ es.get('url','http://localhost:9200') }}" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>用户名环境变量</label>
+            <input name="username_env" value="{{ es.get('username_env','') }}" placeholder="ES_USERNAME">
+          </div>
+          <div class="form-group">
+            <label>密码环境变量</label>
+            <input name="password_env" value="{{ es.get('password_env','') }}" placeholder="ES_PASSWORD">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>超时（秒）</label>
+          <input name="timeout_sec" type="number" value="{{ es.get('timeout_sec',10) }}">
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/elasticsearch','form-es-url')">保存</button>
+      </form>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">巡检参数</div>
+    <form id="form-report">
+      <div class="form-row">
+        <div class="form-group">
+          <label>报告输出目录</label>
+          <input name="output_dir" value="{{ rpt.get('output_dir','reports') }}">
+        </div>
+        <div class="form-group">
+          <label>时间段采样步长（分钟）</label>
+          <input type="number" disabled value="{{ insp.get('step_minutes',5) }}">
+          <div class="form-hint">在 config.yaml 中修改 inspection.step_minutes</div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/report','form-report')">保存</button>
+    </form>
+  </div>
+</div>
+
+<!-- AI 分析 -->
+<div class="tab-pane" data-pane-group="s" data-pane="llm">
+  <div class="card">
+    <div class="card-title">Claude AI 配置</div>
+    <div class="alert alert-warn" style="margin-bottom:1rem">API Key 请通过环境变量传入，不要写入配置文件。</div>
+    <form id="form-llm">
+      <div class="form-group">
+        <label>模型</label>
+        <select name="model">
+          <option value="claude-sonnet-4-6" {% if llm.get('model')=='claude-sonnet-4-6' %}selected{% endif %}>claude-sonnet-4-6（推荐）</option>
+          <option value="claude-opus-4-7" {% if llm.get('model')=='claude-opus-4-7' %}selected{% endif %}>claude-opus-4-7（最强）</option>
+          <option value="claude-haiku-4-5-20251001" {% if llm.get('model')=='claude-haiku-4-5-20251001' %}selected{% endif %}>claude-haiku-4-5（最快）</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>API Key 环境变量名</label>
+          <input name="api_key_env" value="{{ llm.get('api_key_env','ANTHROPIC_API_KEY') }}">
+        </div>
+        <div class="form-group">
+          <label>最大输出 Token</label>
+          <input name="max_tokens" type="number" value="{{ llm.get('max_tokens',2048) }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Prompt Caching</label>
+        <select name="enable_prompt_caching">
+          <option value="true" {% if llm.get('enable_prompt_caching',True) %}selected{% endif %}>启用（节省费用）</option>
+          <option value="false">禁用</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="postForm('/api/settings/llm','form-llm')">保存</button>
+    </form>
+  </div>
+</div>
+
+<!-- 通知 -->
+<div class="tab-pane" data-pane-group="s" data-pane="notify">
+  <div class="card">
+    <div class="card-title">通知渠道配置</div>
+    <div class="alert alert-info" style="margin-bottom:1rem">Webhook URL 通过环境变量传入，在此配置环境变量名。多个渠道支持同时发送。</div>
+    {% if nots %}
+    <table style="margin-bottom:1rem">
+      <thead><tr><th>类型</th><th>Webhook 环境变量</th><th>@所有人</th></tr></thead>
+      <tbody>
+      {% for n in nots %}
+      <tr>
+        <td>{{ n.type }}</td>
+        <td><code>{{ n.webhook_env }}</code></td>
+        <td>{{ '是' if n.get('mention_all') else '否' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    <p class="text-muted">如需修改通知配置，请直接编辑 config.yaml 中的 notifiers 节。</p>
+  </div>
+</div>
+
+<!-- 批处理窗口 -->
+<div class="tab-pane" data-pane-group="s" data-pane="batch">
+  <div class="card">
+    <div class="card-title">批处理时间窗口</div>
+    <div class="alert alert-info" style="margin-bottom:1rem">批处理窗口内 AI 不会将已知的指标波动误报为异常，时间使用 UTC。</div>
+    {% if bws %}
+    <table>
+      <thead><tr><th>窗口名称</th><th>开始（UTC 时）</th><th>结束（UTC 时）</th><th>放宽的阈值</th></tr></thead>
+      <tbody>
+      {% for b in bws %}
+      <tr>
+        <td>{{ b.label }}</td>
+        <td>{{ b.start_hour }}:00</td>
+        <td>{{ b.end_hour }}:00</td>
+        <td class="text-muted">{{ b.get('relaxed_thresholds',{})|length }} 项</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">未配置批处理窗口。如需配置，请编辑 config.yaml 中的 batch_windows 节。</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

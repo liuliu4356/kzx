@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}GDB 巡检系统{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="sidebar">
+  <div class="logo">🔍 GDB 巡检</div>
+  <a href="/" class="{% if active=='home' %}active{% endif %}"><span class="icon">🏠</span> 巡检控制台</a>
+  <a href="/sites" class="{% if active=='sites' %}active{% endif %}"><span class="icon">🏢</span> 机房管理</a>
+  <a href="/queries" class="{% if active=='queries' %}active{% endif %}"><span class="icon">📊</span> 巡检指标</a>
+  <a href="/settings" class="{% if active=='settings' %}active{% endif %}"><span class="icon">⚙️</span> 系统设置</a>
+  <a href="/reports" class="{% if active=='reports' %}active{% endif %}"><span class="icon">📋</span> 报告历史</a>
+</nav>
+<main class="main">
+  {% block content %}{% endblock %}
+</main>
+<script>
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function switchTab(group, name){
+  document.querySelectorAll('[data-tab-group="'+group+'"]').forEach(el=>{
+    el.classList.toggle('active', el.dataset.tab===name);
+  });
+  document.querySelectorAll('[data-pane-group="'+group+'"]').forEach(el=>{
+    el.classList.toggle('active', el.dataset.pane===name);
+  });
+}
+async function del(url, confirmMsg, reload){
+  if(!confirm(confirmMsg)) return;
+  const r = await fetch(url,{method:'DELETE'});
+  if(r.ok){ if(reload) location.reload(); }
+  else alert('删除失败');
+}
+async function postForm(url, formId, successMsg){
+  const form = document.getElementById(formId);
+  const r = await fetch(url,{method:'POST',body:new FormData(form)});
+  if(r.ok){ alert(successMsg||'保存成功'); location.reload(); }
+  else { const e=await r.json(); alert('失败: '+(e.detail||r.status)); }
+}
+function fillForm(formId, data){
+  const form = document.getElementById(formId);
+  for(const [k,v] of Object.entries(data)){
+    const el = form.elements[k];
+    if(el) el.value = v??'';
+  }
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

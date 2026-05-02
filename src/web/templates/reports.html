@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}报告历史{% endblock %}
+{% block content %}
+<h1 class="page-title">📋 报告历史</h1>
+{% if reports %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead><tr><th>文件名</th><th>格式</th><th>大小</th><th>生成时间</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for r in reports %}
+    <tr>
+      <td><code>{{ r.name }}</code></td>
+      <td>{% if r.name.endswith('.html') %}<span class="badge badge-ok">HTML</span>{% else %}<span class="badge badge-gray">MD</span>{% endif %}</td>
+      <td class="text-muted">{{ r.size_kb }} KB</td>
+      <td class="text-muted">{{ r.mtime }}</td>
+      <td><a class="btn btn-outline btn-sm" href="/reports/view/{{ r.name }}" target="_blank">查看</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">
+  <div class="empty-icon">📋</div>
+  <p>还没有生成报告。<br><span class="text-muted">前往「巡检控制台」执行第一次巡检。</span></p>
+</div>
+{% endif %}
+{% endblock %}

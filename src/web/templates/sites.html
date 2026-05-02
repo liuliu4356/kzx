@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}机房管理{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+  <h1 class="page-title" style="margin:0">🏢 机房管理</h1>
+  <button class="btn btn-primary" onclick="openModal('modal-add')">＋ 添加机房</button>
+</div>
+
+<div class="alert alert-info">机房对应一套独立的 Prometheus 实例。巡检时所有机房并发采集，共用同一组指标配置。</div>
+
+{% if sites %}
+<div class="card">
+  <table>
+    <thead><tr><th>机房名称</th><th>Prometheus 地址</th><th>ES 地址</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for s in sites %}
+    <tr>
+      <td><strong>{{ s.label }}</strong></td>
+      <td><code class="truncate">{{ s.prometheus_url }}</code></td>
+      <td class="text-muted">{{ s.es_url or '（使用全局）' }}</td>
+      <td class="actions">
+        <button class="btn btn-outline btn-sm" onclick="editSite({{ s | tojson }})">编辑</button>
+        <button class="btn btn-danger btn-sm" onclick="del('/api/sites/{{ s.label }}','确定删除机房「{{ s.label }}」？',true)">删除</button>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">
+  <div class="empty-icon">🏢</div>
+  <p>还没有配置机房。<br><span class="text-muted">点击右上角「添加机房」开始配置。</span></p>
+</div>
+{% endif %}
+
+<!-- 添加/编辑 Modal -->
+<div class="modal-backdrop" id="modal-add" onclick="if(event.target===this)closeModal('modal-add')">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">添加机房</div>
+    <form id="form-site">
+      <div class="form-group">
+        <label>机房名称 <span style="color:red">*</span></label>
+        <input name="label" required placeholder="如：东坝、南法信、合肥">
+        <div class="form-hint">唯一标识，不可与已有机房重名</div>
+      </div>
+      <div class="form-group">
+        <label>Prometheus 地址 <span style="color:red">*</span></label>
+        <input name="prometheus_url" required placeholder="http://10.0.0.1:9090">
+      </div>
+      <div class="form-group">
+        <label>Elasticsearch 地址（可选）</label>
+        <input name="es_url" placeholder="留空则使用全局 ES 配置">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-add')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveSite()">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editSite(s){
+  document.getElementById('modal-title').textContent = '编辑机房：' + s.label;
+  fillForm('form-site', s);
+  openModal('modal-add');
+}
+async function saveSite(){
+  await postForm('/api/sites','form-site','机房已保存');
+}
+</script>
+{% endblock %}

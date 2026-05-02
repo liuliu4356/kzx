@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}巡检控制台 — GDB{% endblock %}
+{% block content %}
+{% set sites = raw.get('sites', []) %}
+{% set pqs = raw.get('prometheus',{}).get('queries',[]) %}
+<h1 class="page-title">巡检控制台</h1>
+
+<div class="grid-3" style="margin-bottom:1rem">
+  <div class="card stat">
+    <div class="num {% if sites|length == 0 %}warn{% else %}ok{% endif %}">{{ sites|length }}</div>
+    <div class="label">已配置机房</div>
+  </div>
+  <div class="card stat">
+    <div class="num {% if pqs|length == 0 %}warn{% else %}ok{% endif %}">{{ pqs|length }}</div>
+    <div class="label">Prometheus 指标</div>
+  </div>
+  <div class="card stat">
+    <div class="num {% if reports|length == 0 %}warn{% else %}ok{% endif %}">{{ reports|length }}</div>
+    <div class="label">历史报告</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">▶ 执行巡检</div>
+  <div class="inspect-form">
+    <div class="form-group">
+      <label>巡检模式</label>
+      <select id="period" onchange="toggleCustom()">
+        <option value="instant">快照（当前时刻）</option>
+        <option value="1d">时间段 — 过去 24 小时</option>
+        <option value="1w">时间段 — 过去 7 天</option>
+        <option value="custom">时间段 — 自定义</option>
+      </select>
+    </div>
+    <div class="form-group" id="start-wrap" style="display:none">
+      <label>起始时间（UTC）</label>
+      <input type="datetime-local" id="range-start">
+    </div>
+    <div class="form-group" id="end-wrap" style="display:none">
+      <label>结束时间（UTC）</label>
+      <input type="datetime-local" id="range-end">
+    </div>
+    <div class="form-group">
+      <label>报告格式</label>
+      <select id="fmt">
+        <option value="html">HTML（可在浏览器查看）</option>
+        <option value="md">Markdown（.md 文件）</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>AI 分析</label>
+      <select id="skip-llm">
+        <option value="false">启用（推荐）</option>
+        <option value="true">跳过（快速）</option>
+      </select>
+    </div>
+    <div class="form-group" style="align-self:flex-end">
+      <button class="btn btn-primary" onclick="runInspect()">🚀 开始巡检</button>
+    </div>
+  </div>
+  <div id="log-box"></div>
+  <div id="report-link" style="display:none;margin-top:.75rem"></div>
+</div>
+
+{% if reports %}
+<div class="card">
+  <div class="card-title">📋 最近报告</div>
+  <table>
+    <thead><tr><th>文件名</th><th>大小</th><th>生成时间</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for r in reports %}
+    <tr>
+      <td><code>{{ r.name }}</code></td>
+      <td class="text-muted">{{ r.size_kb }} KB</td>
+      <td class="text-muted">{{ r.mtime }}</td>
+      <td><a class="btn btn-outline btn-sm" href="/reports/view/{{ r.name }}" target="_blank">查看</a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCustom(){
+  const v = document.getElementById('period').value;
+  document.getElementById('start-wrap').style.display = v==='custom'?'block':'none';
+  document.getElementById('end-wrap').style.display  = v==='custom'?'block':'none';
+}
+async function runInspect(){
+  const period = document.getElementById('period').value;
+  const fmt    = document.getElementById('fmt').value;
+  const skipLlm= document.getElementById('skip-llm').value;
+  const logBox = document.getElementById('log-box');
+  const linkBox= document.getElementById('report-link');
+  logBox.innerHTML=''; logBox.className='visible'; linkBox.style.display='none';
+
+  const fd = new FormData();
+  fd.append('period', period==='custom'?'instant':period);
+  fd.append('fmt', fmt);
+  fd.append('skip_llm', skipLlm);
+  if(period==='custom'){
+    fd.append('start', document.getElementById('range-start').value.replace('T','T'));
+    fd.append('end',   document.getElementById('range-end').value.replace('T','T'));
+  }
+
+  const resp = await fetch('/api/inspect',{method:'POST',body:fd});
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf='';
+  while(true){
+    const {done,value} = await reader.read();
+    if(done) break;
+    buf += decoder.decode(value,{stream:true});
+    const lines = buf.split('\n\n'); buf = lines.pop();
+    for(const line of lines){
+      if(!line.startsWith('data:')) continue;
+      const msg = line.slice(5).trim();
+      if(msg.startsWith('DONE:')){
+        const fname = msg.slice(5);
+        linkBox.innerHTML=`<a class="btn btn-success" href="/reports/view/${fname}" target="_blank">📄 查看报告：${fname}</a>`;
+        linkBox.style.display='block';
+        logBox.innerHTML += `<span class="log-ok">✅ 完成！</span>\n`;
+      } else if(msg.startsWith('ERROR:')){
+        logBox.innerHTML += `<span class="log-err">❌ ${msg.slice(6)}</span>\n`;
+      } else {
+        logBox.innerHTML += `<span class="log-info">${msg}</span>\n`;
+      }
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+  }
+}
+</script>
+{% endblock %}
