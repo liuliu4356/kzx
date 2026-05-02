@@ -49,8 +49,13 @@ def _query_one(client: httpx.Client, base_url: str, q: PromQuery) -> PromResult:
                 unit=q.unit, is_anomaly=False, error="无数据",
                 timestamp=now_iso,
             )
-        # 取所有 series 的最大值作为代表(瞬时值场景下足够 MVP)
-        values = [float(r["value"][1]) for r in results if "value" in r]
+        # 处理两种格式：1.时间序列 [{"metric":{}, "value":[t,v]},...] 2.标量 [t,v]
+        values = []
+        for r in results:
+            if isinstance(r, list) and len(r) == 2:
+                values.append(float(r[1]))
+            elif isinstance(r, dict) and "value" in r:
+                values.append(float(r["value"][1]))
         if not values:
             return PromResult(
                 name=q.name, promql=q.promql, value=None, threshold=q.threshold,

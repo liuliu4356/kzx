@@ -204,11 +204,104 @@ report.md.j2
 
 ---
 
+---
+
+## Demo-5 · 双模式巡检（快照 + 时间段审计）
+
+**日期**：2026-05-02  
+**状态**：✅ 完成
+
+### 背景
+
+快照模式只能看当前一刻，无法捕捉凌晨 2 点 CPU 突增等时间段内的异常。需要支持：按 1 天 / 1 周 / 自定义时间段进行审计，找出所有超阈值时段，并标注时间、机房、节点 IP。同时引入并发采集，多机房并行执行以缩短耗时。
+
+### 完成内容
+
+| 模块 | 变更 | 说明 |
+|---|---|---|
+| `src/collectors/prometheus_range.py` | **新增** | `/api/v1/query_range` 采集、异常窗口提取、AnomalyWindow dataclass |
+| `src/collectors/__init__.py` | 重写 | SiteResult 支持双模式字段；`collect_sites()` 支持 mode/period_start/period_end 参数；`ThreadPoolExecutor` 并发采集 |
+| `src/config.py` | 新增 `InspectionConfig` | `step_minutes` 字段，默认 5 分钟 |
+| `src/analyzer.py` | 双 payload 构建函数 | range 模式传异常窗口摘要（不传原始时序，节省 token）；instant 模式保持原格式 |
+| `src/reporter.py` | 接受 period_start/end | 传入模板渲染 |
+| `src/notifiers/__init__.py` | 双模式摘要 | range 模式输出异常窗口总数和峰值 |
+| `templates/report.md.j2` | 完全重写 | 双模式 Jinja2 条件渲染 |
+| `src/main.py` | 新增 `--period/--start/--end` | 解析时间段，传入 collect_sites + analyzer + reporter |
+| `config.example.yaml` | 新增 `inspection` 节 | `step_minutes: 5` |
+
+### 新数据模型
+
+```
+AnomalyWindow
+  start_ts      ISO 时间字符串（UTC）
+  end_ts        ISO 时间字符串（UTC）
+  instance      节点 IP（已去除端口）
+  max_value     窗口内最大值
+  threshold     阈值
+  unit          单位
+  duration_minutes  持续时长
+
+PromRangeResult
+  name / promql / threshold / unit / anomaly_when
+  period_min / period_max / period_avg   整个时段的统计值
+  anomaly_windows: list[AnomalyWindow]
+  is_anomaly → bool (有窗口即为 True)
+```
+
+### 异常窗口合并算法
+
+```
+对每个 instance 的时序：
+  1. 筛选出所有超阈值点（violations）
+  2. 相邻两点间隔 ≤ 2×step_minutes（秒）→ 合并为同一窗口
+  3. 记录窗口起止时间、最大值、持续时长
+```
+
+### 并发采集
+
+```
+ThreadPoolExecutor(max_workers=min(机房数, 8))
+  → 各机房 Prometheus range query + ES query 并行执行
+  → 按原始 site 顺序拼装结果（保证报告顺序一致）
+```
+
+### 时间段审计报告样例
+
+```
+#### 🔴 cpu_usage
+
+- 统计：最高 85.300% / 平均 8.123% / 最低 0.900% · 阈值 10%
+
+🔴 异常窗口（2 段）
+
+| 时间段 | 节点 IP | 峰值 | 阈值 | 持续时长 |
+|---|---|---|---|---|
+| 🔴 2026-05-01 18:03 UTC ~ 2026-05-01 19:31 UTC | 25.131.185.41 | 85.300% | 10% | 90 分钟 |
+| 🔴 2026-05-01 18:07 UTC ~ 2026-05-01 19:28 UTC | 25.131.185.43 | 79.100% | 10% | 83 分钟 |
+```
+
+### 运行方式
+
+```bash
+# 快照（默认）
+python -m src.main inspect
+
+# 过去 24 小时
+python -m src.main inspect --period 1d
+
+# 过去 7 天
+python -m src.main inspect --period 1w
+
+# 自定义时间段（UTC）
+python -m src.main inspect --start 2026-05-01T00:00 --end 2026-05-02T00:00
+```
+
+---
+
 ## 待开发（下一步）
 
 | 优先级 | 内容 |
 |---|---|
-| P2 | 表规模监控：补充表记录数 / 表大小 PromQL（需 GDB exporter 支持） |
+| P2 | 表规模监控：表记录数 / 表大小 PromQL（需 GDB exporter 支持） |
 | P2 | 数据字典状态检查：禁用/禁写表必须为 0 |
-| P2 | 并发采集：多机房目前顺序执行，可用 `concurrent.futures` 并行化 |
-| P3 | 历史趋势：对比上次报告，标出新增异常和已恢复项 |
+| P3 | 历史趋势对比：与上次报告 diff，标出新增异常和已恢复项 |

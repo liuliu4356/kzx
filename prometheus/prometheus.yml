@@ -185,3 +185,12 @@ scrape_configs:
       - targets: ['prometheus:9090']
         labels:
           service: prometheus
+
+  # ============ 模拟异常指标 (测试用) ============
+  - job_name: 'mock-anomaly'
+    static_configs:
+      - targets: ['mock-metrics:9100']
+        labels:
+          datacenter: 测试
+          role: mock
+          purpose: anomaly-test
