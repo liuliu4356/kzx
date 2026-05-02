@@ -12,74 +12,176 @@ rule_files:
   - "/etc/prometheus/rules/*.yml"
 
 scrape_configs:
-  # Prometheus 自身
+  # ============ Prometheus 自身 ============
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # 服务器 1 - Web Server (Node + MySQL + Redis)
-  - job_name: 'node-1'
+  # ============ 北京东坝机房 ============
+  # 管理节点 (OMM/RDB/MDS/CM/PM)
+  - job_name: 'dongba-omm'
     static_configs:
       - targets: ['node-exporter-1:9100']
         labels:
-          server: node-1
-          role: web-server
-          env: production
-
-  - job_name: 'mysql-1'
-    static_configs:
-      - targets: ['mysqld-exporter-1:9104']
-        labels:
-          server: node-1
-          service: mysql
-
-  - job_name: 'redis-1'
-    static_configs:
-      - targets: ['redis-exporter-1:9121']
-        labels:
-          server: node-1
-          service: redis
-
-  # 服务器 2 - API Server (Node + Nginx)
-  - job_name: 'node-2'
-    static_configs:
+          datacenter: 北京东坝
+          role: OMM
+          component: management
+          ip: 25.131.185.181
       - targets: ['node-exporter-2:9100']
         labels:
-          server: node-2
-          role: api-server
-          env: production
+          datacenter: 北京东坝
+          role: OMM
+          component: management
+          ip: 25.131.185.182
 
-  - job_name: 'nginx-1'
-    static_configs:
-      - targets: ['nginx-exporter-1:9113']
-        labels:
-          server: node-2
-          service: nginx
-
-  # 服务器 3 - Database Server (Node + PostgreSQL)
-  - job_name: 'node-3'
+  # GTM 节点 (全局事务管理)
+  - job_name: 'dongba-gtm'
     static_configs:
       - targets: ['node-exporter-3:9100']
         labels:
-          server: node-3
-          role: database-server
-          env: production
+          datacenter: 北京东坝
+          role: GTM
+          component: transaction
+          ip: 25.131.185.183
+          priority: standby
+      - targets: ['node-exporter:9100']
+        labels:
+          datacenter: 北京东坝
+          role: GTM
+          component: transaction
+          ip: 25.131.185.184
+          priority: standby
+      - targets: ['node-exporter-1:9100']
+        labels:
+          datacenter: 北京东坝
+          role: GTM
+          component: transaction
+          ip: 25.131.185.185
+          priority: standby
 
-  - job_name: 'postgres-1'
+  # DBProxy 代理 (89个实例)
+  - job_name: 'dongba-dbproxy'
+    static_configs:
+      - targets: ['nginx-exporter-1:9113']
+        labels:
+          datacenter: 北京东坝
+          role: DBProxy
+          component: proxy
+          type: auth
+          ip_range: 25.131.185.186-200
+
+  # DB 数据库节点 (80台)
+  - job_name: 'dongba-db'
+    static_configs:
+      - targets: ['mysql-exporter-1:9104']
+        labels:
+          datacenter: 北京东坝
+          role: DB
+          component: database
+          ip_range: 25.131.185.101-140
+
+  # ============ 北京南法信机房 ============
+  - job_name: 'nanfaxin-omm'
     static_configs:
       - targets: ['postgres-exporter-1:9187']
         labels:
-          server: node-3
-          service: postgresql
+          datacenter: 北京南法信
+          role: OMM
+          component: management
+          ip: 26.131.185.181
+          vip: 26.131.185.100
 
+  - job_name: 'nanfaxin-gtm'
+    static_configs:
+      - targets: ['redis-exporter-1:9121']
+        labels:
+          datacenter: 北京南法信
+          role: GTM
+          component: transaction
+          ip: 26.131.185.183
+          priority: primary
+
+  - job_name: 'nanfaxin-db'
+    static_configs:
+      - targets: ['mysqld-exporter-1:9104']
+        labels:
+          datacenter: 北京南法信
+          role: DB
+          component: database
+          ip_range: 26.131.185.141-180
+          cluster: g1-940
+
+  # ============ 合肥机房 (灾备) ============
+  - job_name: 'hefei-omm'
+    static_configs:
+      - targets: ['logstash:9600']
+        labels:
+          datacenter: 合肥
+          role: OMM
+          component: management
+          ip: 27.130.52.141
+          vip: 27.130.52.100
+          type: dr
+
+  - job_name: 'hefei-gtm'
+    static_configs:
+      - targets: ['elasticsearch:9200']
+        labels:
+          datacenter: 合肥
+          role: GTM
+          component: transaction
+          ip: 27.130.52.143
+          type: dr
+
+  - job_name: 'hefei-dbproxy'
+    static_configs:
+      - targets: ['nginx-exporter-1:9113']
+        labels:
+          datacenter: 合肥
+          role: DBProxy
+          component: proxy
+          type: auth
+          ip_range: 27.130.52.145-155
+          type: dr
+
+  - job_name: 'hefei-db'
+    static_configs:
+      - targets: ['postgres-exporter-1:9187']
+        labels:
+          datacenter: 合肥
+          role: DB
+          component: database
+          ip_range: 27.130.52.101-140
+          deploy_mode: 双实例部署
+          type: dr
+
+  # ============ 公共组件 ============
   # Elasticsearch 监控
   - job_name: 'elasticsearch'
     metrics_path: '/_prometheus/metrics'
     static_configs:
       - targets: ['elasticsearch:9200']
+        labels:
+          service: elasticsearch
 
   # Logstash 监控
   - job_name: 'logstash'
     metrics_path: '/_node/stats'
     static_configs:
       - targets: ['logstash:9600']
+        labels:
+          service: logstash
+
+  # Kibana 监控
+  - job_name: 'kibana'
+    static_configs:
+      - targets: ['kibana:5601']
+        labels:
+          service: kibana
+
+  # Prometheus 自身监控
+  - job_name: 'prometheus-self'
+    static_configs:
+      - targets: ['prometheus:9090']
+        labels:
+          service: prometheus

@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # ============ Prometheus 监控 ============
+  # ============ Prometheus 核心 ============
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: prometheus
@@ -17,24 +17,9 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     restart: unless-stopped
+    networks:
+      - monitor-network
 
-  # Prometheus Node Exporter - 采集本机指标
-  node-exporter:
-    image: prom/node-exporter:v1.7.0
-    container_name: node-exporter
-    ports:
-      - "9100:9100"
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    restart: unless-stopped
-
-  # Prometheus Alertmanager
   alertmanager:
     image: prom/alertmanager:v0.26.0
     container_name: alertmanager
@@ -46,20 +31,180 @@ services:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
     restart: unless-stopped
+    networks:
+      - monitor-network
 
-  # Grafana 可视化 (可选)
-  grafana:
-    image: grafana/grafana:10.3.0
-    container_name: grafana
+  # ============ 北京东坝机房节点 ============
+  # OMM 节点 (主备)
+  node-exporter-dongba-omm1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-dongba-omm1
     ports:
-      - "3000:3000"
+      - "9101:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--web.listen-address=:9100'
     volumes:
-      - ./grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
+      - NODE_EXPORTER_LABELS=datacenter=北京东坝,role=OMM,ip=25.131.185.181
     restart: unless-stopped
+    networks:
+      - monitor-network
+
+  node-exporter-dongba-omm2:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-dongba-omm2
+    ports:
+      - "9102:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    environment:
+      - NODE_EXPORTER_LABELS=datacenter=北京东坝,role=OMM,ip=25.131.185.182
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  # GTM 节点 (3台)
+  node-exporter-dongba-gtm1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-dongba-gtm1
+    ports:
+      - "9103:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    environment:
+      - NODE_EXPORTER_LABELS=datacenter=北京东坝,role=GTM,ip=25.131.185.183
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  # ============ 北京南法信机房节点 ============
+  node-exporter-nanfaxin-omm1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-nanfaxin-omm1
+    ports:
+      - "9111:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    environment:
+      - NODE_EXPORTER_LABELS=datacenter=北京南法信,role=OMM,ip=26.131.185.181,vip=26.131.185.100
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  node-exporter-nanfaxin-gtm1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-nanfaxin-gtm1
+    ports:
+      - "9112:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    environment:
+      - NODE_EXPORTER_LABELS=datacenter=北京南法信,role=GTM,ip=26.131.185.183,priority=primary
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  # ============ 合肥机房 (灾备) 节点 ============
+  node-exporter-hefei-omm1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-hefei-omm1
+    ports:
+      - "9121:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    environment:
+      - NODE_EXPORTER_LABELS=datacenter=合肥,role=OMM,ip=27.130.52.141,vip=27.130.52.100,type=dr
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  node-exporter-hefei-gtm1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-hefei-gtm1
+    ports:
+      - "9122:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    environment:
+      - NODE_EXPORTER_LABELS=datacenter=合肥,role=GTM,ip=27.130.52.143,type=dr
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  # ============ 数据库Exporter ============
+  mysqld-exporter-1:
+    image: prom/mysqld-exporter:v0.15.0
+    container_name: mysqld-exporter-1
+    ports:
+      - "9104:9100"
+    environment:
+      - DATA_SOURCE_NAME=root:mysql@tcp(mysql-1:3306)/
+    depends_on:
+      - mysql-1
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  postgres-exporter-1:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter-1
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:postgres@postgres-1:5432/postgres?sslmode=disable
+    depends_on:
+      - postgres-1
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  redis-exporter-1:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis-exporter-1
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-1:6379
+    depends_on:
+      - redis-1
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  nginx-exporter-1:
+    image: nginx/nginx-prometheus-exporter:1.2.0
+    container_name: nginx-exporter-1
+    ports:
+      - "9113:9113"
+    command:
+      - '-nginx.scrape-uri=http://nginx-1:8081/nginx-status'
+    depends_on:
+      - nginx-1
+    restart: unless-stopped
+    networks:
+      - monitor-network
 
   # ============ ELK 日志系统 ============
   elasticsearch:
@@ -75,6 +220,8 @@ services:
     volumes:
       - ./es-data:/usr/share/elasticsearch/data
     restart: unless-stopped
+    networks:
+      - monitor-network
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.13.0
@@ -86,6 +233,8 @@ services:
     depends_on:
       - elasticsearch
     restart: unless-stopped
+    networks:
+      - monitor-network
 
   logstash:
     image: docker.elastic.co/logstash/logstash:8.13.0
@@ -101,17 +250,82 @@ services:
     environment:
       - LOGSTASH_ARGS="-f /usr/share/logstash/pipeline/logstash.conf"
     restart: unless-stopped
+    networks:
+      - monitor-network
 
-  # Filebeat - 收集本机日志
   filebeat:
     image: docker.elastic.co/beats/filebeat:8.13.0
     container_name: filebeat
+    user: root
     volumes:
-      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - /var/log:/var/log:ro
     depends_on:
       - logstash
     restart: unless-stopped
+    command: ["sh", "-c", "chmod go-w /usr/share/filebeat/filebeat.yml && filebeat -e -c /usr/share/filebeat/filebeat.yml"]
+    networks:
+      - monitor-network
+
+  # ============ Grafana 可视化 ============
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  # ============ 数据库服务 (用于测试) ============
+  mysql-1:
+    image: mysql:8.0
+    container_name: mysql-1
+    ports:
+      - "3306:3306"
+      - "33060:33060"
+    environment:
+      - MYSQL_ROOT_PASSWORD=mysql
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  postgres-1:
+    image: postgres:16-alpine
+    container_name: postgres-1
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  redis-1:
+    image: redis:7-alpine
+    container_name: redis-1
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - monitor-network
+
+  nginx-1:
+    image: nginx:alpine
+    container_name: nginx-1
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx/status.conf:/etc/nginx/conf.d/status.conf:ro
+    restart: unless-stopped
+    networks:
+      - monitor-network
 
 networks:
   default:

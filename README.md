@@ -2,9 +2,20 @@
 
 > 基于 Prometheus + ELK + AI 的自动化运维巡检解决方案
 
+[![版本](https://img.shields.io/badge/version-v1.1.0-blue.svg)](CHANGELOG.md)
 [![Docker](https://img.shields.io/docker/pulls/prom/prometheus.svg)](https://hub.docker.com/u/prom)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub](https://img.shields.io/github/v/release/liuliu4356/kzx)](https://github.com/liuliu4356/kzx/releases)
+
+## 📋 版本信息
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| [v1.1.0](CHANGELOG.md#v110-2026-05-02---多机房支持版本) | 2026-05-02 | 多机房支持，按生产巡检标准配置 |
+| [v1.0.0](CHANGELOG.md#v100-2026-05-02---初始版本) | 2026-05-02 | 初始版本，基础监控架构 |
+
+**[查看完整更新日志](CHANGELOG.md)**
 
 ## 📋 项目简介
 
