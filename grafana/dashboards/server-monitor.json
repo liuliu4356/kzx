@@ -1,0 +1,400 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "panels": [],
+      "title": "🖥️ 服务器概览",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [{"options": {"0": {"text": "Down"}}, "type": "value"}],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 1},
+      "id": 101,
+      "options": {"orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "showThresholdLabels": false, "showThresholdMarkers": true},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "up{job=~'node-1|node-2|node-3'}", "legendFormat": "{{server}}", "refId": "A"}],
+      "title": "服务器在线状态",
+      "type": "gauge"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 20, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 80}]},
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 4, "w": 16, "x": 8, "y": 1},
+      "id": 102,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "100 - (avg by (server) (rate(node_cpu_seconds_total{mode='idle',job=~'node-1|node-2|node-3'}[5m])) * 100))", "legendFormat": "{{server}} - CPU", "refId": "A"}],
+      "title": "CPU 使用率 (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 20, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 85}]},
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 5},
+      "id": 103,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "(1 - (node_memory_MemAvailable_bytes{job=~'node-1|node-2|node-3'} / node_memory_MemTotal_bytes{job=~'node-1|node-2|node-3'})) * 100", "legendFormat": "{{server}}", "refId": "A"}],
+      "title": "内存使用率 (%)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 20, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 90}]},
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 5},
+      "id": 104,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "(node_filesystem_size_bytes{job=~'node-1|node-2|node-3',mountpoint='/'} - node_filesystem_avail_bytes{job=~'node-1|node-2|node-3',mountpoint='/'}) / node_filesystem_size_bytes{job=~'node-1|node-2|node-3',mountpoint='/'} * 100", "legendFormat": "{{server}}", "refId": "A"}],
+      "title": "磁盘使用率 (%)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 10},
+      "id": 200,
+      "panels": [],
+      "title": "🌐 网络监控",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 11},
+      "id": 201,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "rate(node_network_receive_bytes_total{job=~'node-1|node-2|node-3'}[5m])", "legendFormat": "{{server}} - {{device}} - Rx", "refId": "A"}],
+      "title": "网络接收速率 (B/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 11},
+      "id": 202,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "rate(node_network_transmit_bytes_total{job=~'node-1|node-2|node-3'}[5m])", "legendFormat": "{{server}} - {{device}} - Tx", "refId": "A"}],
+      "title": "网络发送速率 (B/s)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "id": 300,
+      "panels": [],
+      "title": "🗄️ 数据库监控 (MySQL / PostgreSQL)",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 17},
+      "id": 301,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "mysql_global_status_threads_connected", "legendFormat": "MySQL 连接数", "refId": "A"}],
+      "title": "MySQL 连接数",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 17},
+      "id": 302,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "pg_stat_database_numbackends", "legendFormat": "PostgreSQL 连接数", "refId": "A"}],
+      "title": "PostgreSQL 连接数",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 17},
+      "id": 303,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "rate(mysql_global_status_queries_total[5m])", "legendFormat": "MySQL QPS", "refId": "A"}, {"expr": "rate(pg_stat_database_xact_commit[5m]) + rate(pg_stat_database_xact_rollback[5m])", "legendFormat": "PostgreSQL TPS", "refId": "B"}],
+      "title": "数据库 QPS/TPS",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 21},
+      "id": 400,
+      "panels": [],
+      "title": "🔴 Redis 缓存监控",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 10000}, {"color": "red", "value": 50000}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 22},
+      "id": 401,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "redis_db_keys", "legendFormat": "Redis Keys", "refId": "A"}],
+      "title": "Redis Keys 数量",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 22},
+      "id": 402,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "redis_replication_master_link_down", "legendFormat": "Redis 复制状态", "refId": "A"}],
+      "title": "Redis 主从状态",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "unit": "Bps"
+        }
+      },
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 22},
+      "id": 403,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "rate(redis_commands_processed_total[5m])", "legendFormat": "Redis QPS", "refId": "A"}],
+      "title": "Redis QPS",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 26},
+      "id": 500,
+      "panels": [],
+      "title": "🌍 Nginx 监控",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}]},
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 27},
+      "id": 501,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "nginx_connections_active", "legendFormat": "活跃连接", "refId": "A"}],
+      "title": "Nginx 活跃连接",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 18, "x": 6, "y": 27},
+      "id": 502,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "rate(nginx_http_requests_total[5m])", "legendFormat": "Nginx QPS", "refId": "A"}],
+      "title": "Nginx QPS",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 31},
+      "id": 600,
+      "panels": [],
+      "title": "📊 系统负载 & 进程",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 0, "y": 32},
+      "id": 601,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "node_load1{job=~'node-1|node-2|node-3'}", "legendFormat": "{{server}} - 1min", "refId": "A"}, {"expr": "node_load5{job=~'node-1|node-2|node-3'}", "legendFormat": "{{server}} - 5min", "refId": "B"}, {"expr": "node_load15{job=~'node-1|node-2|node-3'}", "legendFormat": "{{server}} - 15min", "refId": "C"}],
+      "title": "系统负载",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"axisLabel": "", "axisPlacement": "auto", "barAlignment": 0, "drawStyle": "line", "fillOpacity": 10, "gradientMode": "none", "lineInterpolation": "linear", "lineWidth": 1, "pointSize": 5, "scaleDistribution": {"type": "linear"}, "showPoints": "never", "spanNulls": true},
+          "mappings": [],
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 5, "w": 12, "x": 12, "y": 32},
+      "id": 602,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "8.0.0",
+      "targets": [{"expr": "node_procs_running{job=~'node-1|node-2|node-3'}", "legendFormat": "{{server}} - running", "refId": "A"}, {"expr": "node_procs_blocked{job=~'node-1|node-2|node-3'}", "legendFormat": "{{server}} - blocked", "refId": "B"}],
+      "title": "进程状态",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["prometheus", "monitoring", "linux", "mysql", "redis", "nginx"],
+  "templating": {
+    "list": [
+      {
+        "current": {"text": "Prometheus", "value": "Prometheus"},
+        "hide": 0,
+        "label": "Data Source",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {"selected": false, "text": "All", "value": "$__all"},
+        "datasource": "Prometheus",
+        "definition": "label_values(up, server)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "服务器",
+        "multi": true,
+        "name": "server",
+        "options": [],
+        "query": {"query": "label_values(up, server)", "refId": "StandardVariableQuery"},
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "服务器综合监控 Dashboard",
+  "uid": "server-monitor-001",
+  "version": 1
+}

@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  # ============ 模拟服务器 1 (Web 服务器) ============
+  node-exporter-1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-1
+    ports:
+      - "9101:9100"
+    command:
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/rootfs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ============ 模拟服务器 2 (API 服务器) ============
+  node-exporter-2:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-2
+    ports:
+      - "9102:9100"
+    command:
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/rootfs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ============ 模拟服务器 3 (数据库服务器) ============
+  node-exporter-3:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-3
+    ports:
+      - "9103:9100"
+    command:
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/rootfs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

@@ -1,0 +1,137 @@
+prometheus:
+  url: http://localhost:9090
+  timeout_sec: 10
+  queries:
+
+    # ── 系统资源（node_exporter）──────────────────────────────────────────
+    - name: cpu_usage
+      promql: '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)'
+      threshold: 10           # GDB 要求 <10%（凌晨批处理期间放宽见 batch_windows）
+      unit: '%'
+
+    - name: memory_usage
+      promql: '(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100'
+      threshold: 60           # GDB 要求 <60%
+      unit: '%'
+
+    - name: system_load_per_core
+      promql: 'node_load5 / count without(cpu,mode)(node_cpu_seconds_total{mode="idle"})'
+      threshold: 0.5          # 等价于 64核机器 load5 < 32
+      unit: ''
+
+    - name: network_throughput_mbps
+      promql: 'max by(instance) (rate(node_network_receive_bytes_total[5m]) + rate(node_network_transmit_bytes_total[5m])) / 1024 / 1024 * 8'
+      threshold: 100
+      unit: 'Mb/s'
+
+    - name: disk_io_latency_ms
+      promql: 'max by(instance) (rate(node_disk_io_time_seconds_total[5m])) * 1000'
+      threshold: 100          # 正常应为 5ms 级别，100ms 为告警线
+      unit: 'ms'
+
+    - name: disk_usage_data
+      promql: '(1 - node_filesystem_avail_bytes{mountpoint="/data"} / node_filesystem_size_bytes{mountpoint="/data"}) * 100'
+      threshold: 80           # GDB 要求 <80%
+      unit: '%'
+
+    # ── 数据库性能（mysql_exporter / GDB exporter）───────────────────────
+    - name: rdb_connections
+      promql: 'max by(instance) (mysql_global_status_threads_connected)'
+      threshold: 6000         # 上限 10K，常态 2K，60% 为告警
+      unit: ''
+
+    - name: qps
+      promql: 'max by(instance) (rate(mysql_global_status_queries[5m]))'
+      threshold: 2000
+      unit: 'req/s'
+
+    - name: tps
+      promql: 'max by(instance) (rate(mysql_global_status_com_commit[5m]))'
+      threshold: 100          # 常态 <10，100 为告警线
+      unit: 'tx/s'
+
+    - name: replication_lag_sec
+      promql: 'max by(instance) (mysql_slave_status_seconds_behind_master)'
+      threshold: 1            # 非批处理 <1s；批处理期间放宽见 batch_windows
+      unit: 's'
+
+    - name: dbproxy_slow_queries
+      promql: 'sum by(instance) (increase(mysql_global_status_slow_queries[5m]))'
+      threshold: 2000         # 正常时段 ≤2000；批处理期间激增属已知现象
+      unit: ''
+
+    # ── 集群健康 ────────────────────────────────────────────────────────
+    - name: instance_up
+      promql: 'up{job=~"gdb.*|mysql.*|node.*"}'
+      threshold: 1
+      unit: ''
+      anomaly_when: lt        # 任意实例 down 即异常
+
+    - name: emergency_alerts
+      promql: 'sum(gdb_alert_count{severity="critical"}) or vector(0)'
+      threshold: 0            # 紧急告警必须为 0
+      unit: ''
+      anomaly_when: gt
+
+elasticsearch:
+  url: http://localhost:9200
+  username_env: ES_USERNAME
+  password_env: ES_PASSWORD
+  timeout_sec: 10
+  queries:
+
+    # 需人工排查的关键错误（GDB/MySQL 层）
+    - name: gdb_critical_errors
+      index: 'logstash-gdb-*'
+      query_string: >
+        "Lost connection to MySQL server" OR
+        "Lock wait timeout exceeded" OR
+        "Query execution was interrupted" OR
+        "Deadlock found"
+      time_range_hours: 24
+      size: 50
+
+    # 可忽略的已知错误（仅统计条数，不作告警依据）
+    - name: gdb_known_ignorable
+      index: 'logstash-gdb-*'
+      query_string: '"Got packets out of order"'
+      time_range_hours: 24
+      size: 5
+
+    # 组件通用错误（MDS/CM/PM/DBProxy）
+    - name: component_errors
+      index: 'logstash-gdb-*'
+      query_string: 'level:ERROR AND NOT "Got packets out of order"'
+      time_range_hours: 6
+      size: 30
+
+llm:
+  provider: anthropic
+  model: claude-sonnet-4-6
+  api_key_env: ANTHROPIC_API_KEY
+  max_tokens: 2048
+  enable_prompt_caching: true
+
+report:
+  output_dir: reports
+  language: zh-CN
+  filename_format: '%Y-%m-%d-%H%M.md'
+
+# 批处理时间窗口（UTC 时间，需按实际环境调整）
+# 凌晨 2:00-4:00 UTC 对应北京时间 10:00-12:00，请按实际批处理时间段填写
+batch_windows:
+  - label: 日终批处理
+    start_hour: 18            # UTC 18:00 = 北京时间 02:00
+    end_hour: 20              # UTC 20:00 = 北京时间 04:00
+    relaxed_thresholds:
+      cpu_usage: 80           # 批处理期间 CPU 允许到 80%
+      replication_lag_sec: 900  # 批处理期间主备延迟允许 15 分钟
+      dbproxy_slow_queries: 50000  # 批处理期间慢日志激增属已知现象
+
+# 通知渠道（可配置多个，按需删减）
+notifiers:
+  - type: dingtalk
+    webhook_env: DINGTALK_WEBHOOK
+    mention_all: false
+  - type: feishu
+    webhook_env: FEISHU_WEBHOOK

@@ -1,0 +1,51 @@
+# 巡检报告 — {{ generated_at }}
+
+- **模型**: {{ model }}
+- **Prometheus**: {{ prom_url }}
+- **Elasticsearch**: {{ es_url }}
+- **异常指标数**: {{ anomaly_count }} / {{ prom_results | length }}
+
+---
+
+## Prometheus 指标
+
+| 指标 | 值 | 阈值 | 状态 | 错误 |
+|---|---|---|---|---|
+{% for r in prom_results -%}
+| {{ r.name }} | {{ "%.2f"|format(r.value) ~ r.unit if r.value is not none else "—" }} | {{ r.threshold }}{{ r.unit }} | {{ "⚠️ 异常" if r.is_anomaly else ("— 无数据" if r.value is none else "✅ 正常") }} | {{ r.error or "" }} |
+{% endfor %}
+
+## Elasticsearch 日志
+
+{% for r in es_results -%}
+### {{ r.name }} (`{{ r.index }}`)
+
+- 查询: `{{ r.query_string }}`
+- 命中总数: **{{ r.total }}**
+{% if r.error -%}
+- 错误: `{{ r.error }}`
+{%- endif %}
+
+{% if r.hits -%}
+<details><summary>展开 top {{ r.hits | length }} 条</summary>
+
+```
+{% for h in r.hits -%}
+[{{ h.timestamp or "?" }}] {{ h.level or "-" }} | {{ h.message }}
+{% endfor %}
+```
+
+</details>
+{% else -%}
+_无命中日志。_
+{%- endif %}
+
+{% endfor %}
+
+## AI 分析
+
+{{ ai_analysis }}
+
+---
+
+_由 Prometheus + ELK 巡检工具自动生成。_

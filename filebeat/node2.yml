@@ -1,0 +1,12 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/log/syslog
+      - /var/log/messages
+    fields:
+      server: node-2
+      role: api-server
+
+output.logstash:
+  hosts: ["host.docker.internal:5044"]

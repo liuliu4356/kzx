@@ -1,0 +1,187 @@
+version: '3.8'
+
+services:
+  # ============ 模拟服务器 1 (Web 服务器) ============
+  node-exporter-1:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-1
+    ports:
+      - "9101:9100"
+    command:
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.meminfo-ns=host'
+      - '--collector.cpu'
+      - '--collector.netdev'
+      - '--collector.diskstats'
+      - '--collector.filesystem'
+    volumes:
+      - /:/rootfs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  mysqld-exporter-1:
+    image: prom/mysqld-exporter:v0.15.0
+    container_name: mysqld-exporter-1
+    ports:
+      - "9104:9104"
+    environment:
+      - DATA_SOURCE_NAME=root:password@(mysql-1:3306)/mysql
+    depends_on:
+      - mysql-1
+    restart: unless-stopped
+
+  redis-exporter-1:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: redis-exporter-1
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis-1:6379
+    depends_on:
+      - redis-1
+    restart: unless-stopped
+
+  mysql-1:
+    image: mysql:8.0
+    container_name: mysql-1
+    ports:
+      - "3307:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=monitoring
+    restart: unless-stopped
+
+  redis-1:
+    image: redis:7-alpine
+    container_name: redis-1
+    ports:
+      - "6381:6379"
+    restart: unless-stopped
+
+  # ============ 模拟服务器 2 (API 服务器) ============
+  node-exporter-2:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-2
+    ports:
+      - "9102:9100"
+    command:
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/rootfs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  nginx-exporter-1:
+    image: nginx/nginx-prometheus-exporter:1.2.0
+    container_name: nginx-exporter-1
+    ports:
+      - "9113:9113"
+    command:
+      - '-nginx.scrape-uri=http://nginx-1/stub_status'
+    depends_on:
+      - nginx-1
+    restart: unless-stopped
+
+  nginx-1:
+    image: nginx:alpine
+    container_name: nginx-1
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx/status.conf:/etc/nginx/conf.d/status.conf:ro
+    restart: unless-stopped
+
+  # ============ 模拟服务器 3 (数据库服务器) ============
+  node-exporter-3:
+    image: prom/node-exporter:v1.7.0
+    container_name: node-exporter-3
+    ports:
+      - "9103:9100"
+    command:
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/rootfs:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  postgres-exporter-1:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter-1
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:password@postgres-1:5432/postgres?sslmode=disable
+    depends_on:
+      - postgres-1
+    restart: unless-stopped
+
+  postgres-1:
+    image: postgres:16-alpine
+    container_name: postgres-1
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=monitoring
+    restart: unless-stopped
+
+  # ============ ELK Stack ============
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - ./es-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    restart: unless-stopped
+
+  # ============ Prometheus + Grafana ============
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/rules:/etc/prometheus/rules
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+
+networks:
+  default:
+    name: monitor-network
