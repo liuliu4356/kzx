@@ -118,6 +118,10 @@ report:
   language: zh-CN
   filename_format: '%Y-%m-%d-%H%M.md'
 
+# 巡检模式配置
+inspection:
+  step_minutes: 5     # 时间段审计模式的 Prometheus 采样步长（分钟），建议 5-15
+
 # 批处理时间窗口（UTC 时间，需按实际环境调整）
 # 凌晨 2:00-4:00 UTC 对应北京时间 10:00-12:00，请按实际批处理时间段填写
 batch_windows:

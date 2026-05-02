@@ -10,28 +10,44 @@ from . import dingtalk, feishu
 
 def _build_summary(site_results: list[SiteResult],
                    report_path: Path) -> tuple[str, str]:
+    mode = site_results[0].mode if site_results else "instant"
     total_anomaly = sum(s.anomaly_count for s in site_results)
-    total_prom = sum(len(s.prom_results) for s in site_results)
     status = "⚠️ 发现异常" if total_anomaly else "✅ 一切正常"
     title = f"系统巡检报告 — {status}"
 
-    lines = [f"**异常指标**: {total_anomaly} / {total_prom}"]
+    lines: list[str] = []
 
-    for s in site_results:
-        anomaly_items = [
-            f"  - {r.name}: {r.value:.2f}{r.unit} (阈值 {r.threshold}{r.unit})"
-            for r in s.prom_results
-            if r.is_anomaly and r.value is not None
-        ]
-        error_items = [
-            f"  - {r.name}: 采集失败 ({r.error})"
-            for r in s.prom_results
-            if r.error
-        ]
-        if anomaly_items or error_items:
-            lines.append(f"\n**{s.label}**")
-            lines.extend(anomaly_items)
-            lines.extend(error_items)
+    if mode == "range":
+        total_windows = sum(s.total_anomaly_windows for s in site_results)
+        lines.append(f"**模式**: 时间段审计 | **异常指标**: {total_anomaly} | **异常窗口**: {total_windows} 段")
+        for s in site_results:
+            if not s.prom_range_results:
+                continue
+            anomaly_items = [
+                f"  - {r.name}：{len(r.anomaly_windows)} 个窗口，峰值 "
+                f"{max(w.max_value for w in r.anomaly_windows):.2f}{r.unit}"
+                for r in s.prom_range_results if r.is_anomaly
+            ]
+            if anomaly_items:
+                lines.append(f"\n**{s.label}**")
+                lines.extend(anomaly_items)
+    else:
+        total_prom = sum(len(s.prom_results) for s in site_results)
+        lines.append(f"**模式**: 快照 | **异常指标**: {total_anomaly} / {total_prom}")
+        for s in site_results:
+            anomaly_items = [
+                f"  - {r.name}: {r.value:.2f}{r.unit} (阈值 {r.threshold}{r.unit})"
+                for r in s.prom_results
+                if r.is_anomaly and r.value is not None
+            ]
+            error_items = [
+                f"  - {r.name}: 采集失败 ({r.error})"
+                for r in s.prom_results if r.error
+            ]
+            if anomaly_items or error_items:
+                lines.append(f"\n**{s.label}**")
+                lines.extend(anomaly_items)
+                lines.extend(error_items)
 
     lines.append(f"\n**报告文件**: `{report_path}`")
     return title, "\n".join(lines)

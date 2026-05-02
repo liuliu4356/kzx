@@ -61,6 +61,11 @@ class ReportConfig:
 
 
 @dataclass
+class InspectionConfig:
+    step_minutes: int = 5   # range 模式采样步长（分钟），建议 5-15
+
+
+@dataclass
 class SiteConfig:
     label: str             # 机房名称，如"东坝"
     prometheus_url: str    # 该机房 Prometheus 地址，覆盖全局 prometheus.url
@@ -92,6 +97,7 @@ class Config:
     notifiers: list[NotifierItem] = field(default_factory=list)
     batch_windows: list[BatchWindow] = field(default_factory=list)
     sites: list[SiteConfig] = field(default_factory=list)
+    inspection: InspectionConfig = field(default_factory=InspectionConfig)
 
 
 def current_batch_window(windows: list[BatchWindow]) -> BatchWindow | None:
@@ -195,8 +201,14 @@ def load_config(path: str | Path) -> Config:
         for s in raw.get("sites", [])
     ]
 
+    insp_raw = raw.get("inspection", {})
+    inspection = InspectionConfig(
+        step_minutes=int(insp_raw.get("step_minutes", 5)),
+    )
+
     return Config(prometheus=prom, elasticsearch=es, llm=llm, report=report,
-                  notifiers=notifiers, batch_windows=batch_windows, sites=sites)
+                  notifiers=notifiers, batch_windows=batch_windows,
+                  sites=sites, inspection=inspection)
 
 
 def get_es_auth(cfg: ESConfig) -> tuple[str, str] | None:

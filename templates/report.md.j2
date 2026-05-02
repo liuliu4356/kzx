@@ -1,17 +1,18 @@
 # 巡检报告 — {{ generated_at }}
 
+- **模式**: {{ "时间段审计" if mode == "range" else "快照" }}{% if period_str %} · {{ period_str }}{% endif %}
 - **模型**: {{ model }}
 - **机房数**: {{ site_results | length }}
-- **总异常指标**: {{ total_anomaly_count }} / {{ total_prom_count }}
+- **总异常{% if mode == "range" %}指标{% else %}指标{% endif %}**: {{ total_anomaly_count }}
 
 ---
 
 ## 各机房汇总
 
-| 机房 | 异常指标 | 总指标数 | 状态 |
+| 机房 | 异常指标 | {% if mode == "range" %}异常窗口{% else %}总指标{% endif %} | 状态 |
 |---|---|---|---|
 {% for s in site_results -%}
-| {{ s.label }} | {{ s.anomaly_count }} | {{ s.prom_results | length }} | {{ "⚠️ 有异常" if s.anomaly_count > 0 else "✅ 正常" }} |
+| {{ s.label }} | {{ s.anomaly_count }} | {% if mode == "range" %}{{ s.total_anomaly_windows }} 段{% else %}{{ s.prom_results | length }}{% endif %} | {{ "⚠️ 有异常" if s.anomaly_count > 0 else "✅ 正常" }} |
 {% endfor %}
 
 ---
@@ -19,13 +20,44 @@
 {% for s in site_results %}
 ## 机房：{{ s.label }}
 
+{% if mode == "range" %}
+{# ═══════════════════ 时间段审计模式 ═══════════════════ #}
+### Prometheus 指标（时间段统计）
+
+{% for r in s.prom_range_results -%}
+#### {% if r.is_anomaly %}🔴 {% endif %}{{ r.name }}
+
+{% if r.error -%}
+> ⚠️ 采集错误: `{{ r.error }}`
+{%- else -%}
+- 统计：最高 **{{ "%.3f"|format(r.period_max) }}{{ r.unit }}** / 平均 {{ "%.3f"|format(r.period_avg) }}{{ r.unit }} / 最低 {{ "%.3f"|format(r.period_min) }}{{ r.unit }} · 阈值 {{ r.threshold }}{{ r.unit }}
+
+{% if r.anomaly_windows %}
+🔴 **异常窗口（{{ r.anomaly_windows | length }} 段）**
+
+| 时间段 | 节点 IP | 峰值 | 阈值 | 持续时长 |
+|---|---|---|---|---|
+{% for w in r.anomaly_windows -%}
+| 🔴 {{ w.start_ts }} ~ {{ w.end_ts }} | `{{ w.instance }}` | **{{ "%.3f"|format(w.max_value) }}{{ w.unit }}** | {{ w.threshold }}{{ w.unit }} | {{ w.duration_minutes }} 分钟 |
+{% endfor %}
+{% else %}
+✅ 无异常
+{% endif %}
+{%- endif %}
+
+{% endfor %}
+
+{% else %}
+{# ═══════════════════ 快照模式 ═══════════════════ #}
 ### Prometheus 指标
 
 | 指标 | 值 | 阈值 | 状态 | 错误 |
 |---|---|---|---|---|
 {% for r in s.prom_results -%}
-| {{ r.name }} | {{ "%.2f"|format(r.value) ~ r.unit if r.value is not none else "—" }} | {{ r.threshold }}{{ r.unit }} | {{ "⚠️ 异常" if r.is_anomaly else ("— 无数据" if r.value is none else "✅ 正常") }} | {{ r.error or "" }} |
+| {{ r.name }} | {{ "%.3f"|format(r.value) ~ r.unit if r.value is not none else "—" }} | {{ r.threshold }}{{ r.unit }} | {{ "⚠️ 异常" if r.is_anomaly else ("— 无数据" if r.value is none else "✅ 正常") }} | {{ r.error or "" }} |
 {% endfor %}
+
+{% endif %}
 
 ### Elasticsearch 日志
 
@@ -33,11 +65,8 @@
 #### {{ r.name }}{% if r.ignorable %} _(已知/可忽略)_{% endif %} (`{{ r.index }}`)
 
 - 查询: `{{ r.query_string | trim }}`
-- 命中总数: **{{ r.total }}**{% if r.ignorable %} — 此类错误为已知噪音，不计入健康评分{% endif %}
-
-{% if r.error -%}
-- 错误: `{{ r.error }}`
-{%- endif %}
+- 命中总数: **{{ r.total }}**{% if r.ignorable %} — 已知噪音，不计入健康评分{% endif %}
+{% if r.error %}- 错误: `{{ r.error }}`{% endif %}
 
 {% if r.hits and not r.ignorable -%}
 <details><summary>展开 top {{ r.hits | length }} 条</summary>
@@ -50,7 +79,7 @@
 
 </details>
 {%- elif r.hits and r.ignorable -%}
-<details><summary>展开样本（{{ r.hits | length }} 条，仅供参考）</summary>
+<details><summary>样本（{{ r.hits | length }} 条，仅供参考）</summary>
 
 ```
 {% for h in r.hits -%}

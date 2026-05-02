@@ -9,21 +9,34 @@ from .collectors import SiteResult
 from .config import Config
 
 
-def render(site_results: list[SiteResult], ai_analysis: str, cfg: Config) -> Path:
+def render(
+    site_results: list[SiteResult],
+    ai_analysis: str,
+    cfg: Config,
+    period_start: datetime | None = None,
+    period_end: datetime | None = None,
+) -> Path:
     templates_dir = Path(__file__).parent.parent / "templates"
     env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=False)
     tmpl = env.get_template("report.md.j2")
 
     now = datetime.now(timezone.utc)
+    mode = site_results[0].mode if site_results else "instant"
     total_anomaly_count = sum(s.anomaly_count for s in site_results)
-    total_prom_count = sum(len(s.prom_results) for s in site_results)
+
+    period_str = ""
+    if mode == "range" and period_start and period_end:
+        period_str = (f"{period_start.strftime('%Y-%m-%d %H:%M')} ~ "
+                      f"{period_end.strftime('%Y-%m-%d %H:%M')} UTC"
+                      f"（步长 {cfg.inspection.step_minutes} 分钟）")
 
     content = tmpl.render(
         generated_at=now.strftime("%Y-%m-%d %H:%M UTC"),
         model=cfg.llm.model,
+        mode=mode,
+        period_str=period_str,
         site_results=site_results,
         total_anomaly_count=total_anomaly_count,
-        total_prom_count=total_prom_count,
         ai_analysis=ai_analysis,
     )
 
