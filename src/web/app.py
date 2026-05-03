@@ -8,13 +8,17 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, File
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 from . import config_store as cs
+from . import auth as _auth
 from jinja2 import Environment, FileSystemLoader
 from dotenv import load_dotenv
 import json
+
+from ..logging_setup import get_log_path, tail_log
 
 _WEB_DIR = Path(__file__).parent
 _PROJ_ROOT = _WEB_DIR.parent.parent
@@ -23,7 +27,28 @@ _CONFIG_PATH = str(_PROJ_ROOT / "config.yaml")
 
 _scheduler = None
 
+# ── 认证中间件 ─────────────────────────────────────────────────────────────
+
+_AUTH_WHITELIST = {"/login", "/register", "/logout"}
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        if (path.startswith("/static") or path in _AUTH_WHITELIST):
+            return await call_next(request)
+        if _auth.user_count() == 0:
+            if not path.startswith("/register"):
+                return RedirectResponse("/register", status_code=302)
+            return await call_next(request)
+        user = _auth.get_current_user(request)
+        if user is None:
+            return RedirectResponse(f"/login?next={path}", status_code=302)
+        request.state.current_user = user
+        return await call_next(request)
+
+
 app = FastAPI(title="三思GDB巡检平台")
+app.add_middleware(AuthMiddleware)
 
 
 @app.on_event("startup")
@@ -49,7 +74,14 @@ app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="stat
 
 jinja_env = Environment(loader=FileSystemLoader(str(_WEB_DIR / "templates")))
 
-def render_template(name: str, context: dict) -> HTMLResponse:
+
+def _get_current_user(request: Request) -> dict | None:
+    return getattr(request.state, "current_user", None)
+
+
+def render_template(name: str, context: dict, request: Request | None = None) -> HTMLResponse:
+    if request is not None and "current_user" not in context:
+        context["current_user"] = _get_current_user(request)
     template = jinja_env.get_template(name)
     return HTMLResponse(template.render(**context))
 
@@ -62,13 +94,13 @@ async def page_index(request: Request):
     reports = _list_reports()[:10]
     kb_count = len(_list_kb_files()) if _KB_DIR.exists() else 0
     raw["_kb_count"] = kb_count
-    return render_template("index.html", {"raw": raw, "reports": reports, "active": "home"})
+    return render_template("index.html", {"raw": raw, "reports": reports, "active": "home"}, request)
 
 
 @app.get("/sites", response_class=HTMLResponse)
 async def page_sites(request: Request):
     sites = cs.list_sites()
-    return render_template("sites.html", {"sites": sites, "active": "sites"})
+    return render_template("sites.html", {"sites": sites, "active": "sites"}, request)
 
 
 @app.get("/queries", response_class=HTMLResponse)
@@ -90,26 +122,26 @@ async def page_queries(request: Request):
         "export_data_json": export_data,
         "active": "queries",
         "subtab": subtab,
-    })
+    }, request)
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def page_settings(request: Request):
     raw = cs.get_all()
     kb_files = _list_kb_files()
-    return render_template("settings.html", {"raw": raw, "kb_files": kb_files, "active": "settings"})
+    return render_template("settings.html", {"raw": raw, "kb_files": kb_files, "active": "settings"}, request)
 
 
 @app.get("/reports", response_class=HTMLResponse)
 async def page_reports(request: Request):
     reports = _list_reports()
-    return render_template("reports.html", {"reports": reports, "active": "reports", "subtab": ""})
+    return render_template("reports.html", {"reports": reports, "active": "reports", "subtab": ""}, request)
 
 
 @app.get("/reports/settings", response_class=HTMLResponse)
 async def page_reports_settings(request: Request):
     raw = cs.get_all()
-    return render_template("reports_settings.html", {"raw": raw, "active": "reports", "subtab": "settings"})
+    return render_template("reports_settings.html", {"raw": raw, "active": "reports", "subtab": "settings"}, request)
 
 
 # ── 项目总览路由 ───────────────────────────────────────────────────────────
@@ -205,7 +237,112 @@ async def page_overview(page: str):
         "empty_msg": "文档文件不存在或无法读取",
         "active": "overview",
         "subtab": page,
+    }, request)
+
+
+# ── 认证路由 ───────────────────────────────────────────────────────────────
+
+@app.get("/login", response_class=HTMLResponse)
+async def page_login(request: Request, next: str = "/"):
+    if _auth.get_current_user(request):
+        return RedirectResponse("/", status_code=302)
+    return render_template("login.html", {
+        "error": "",
+        "allow_register": _auth.user_count() == 0,
     })
+
+
+@app.post("/login", response_class=HTMLResponse)
+async def do_login(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next: str = Form("/"),
+):
+    token = _auth.login(username, password)
+    if token is None:
+        return render_template("login.html", {
+            "error": "用户名或密码错误",
+            "allow_register": _auth.user_count() == 0,
+        })
+    resp = RedirectResponse(next if next.startswith("/") else "/", status_code=302)
+    resp.set_cookie(_auth.COOKIE_NAME, token, httponly=True, max_age=7 * 24 * 3600, samesite="lax")
+    return resp
+
+
+@app.post("/logout")
+async def do_logout(request: Request):
+    token = request.cookies.get(_auth.COOKIE_NAME, "")
+    if token:
+        _auth.logout(token)
+    resp = RedirectResponse("/login", status_code=302)
+    resp.delete_cookie(_auth.COOKIE_NAME)
+    return resp
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def page_register(request: Request):
+    user = _get_current_user(request)
+    first_user = _auth.user_count() == 0
+    if not first_user and (user is None or user.get("role") != "admin"):
+        return RedirectResponse("/login", status_code=302)
+    return render_template("register.html", {"error": "", "first_user": first_user})
+
+
+@app.post("/register", response_class=HTMLResponse)
+async def do_register(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    password2: str = Form(...),
+    role: str = Form("viewer"),
+):
+    user = _get_current_user(request)
+    first_user = _auth.user_count() == 0
+    if not first_user and (user is None or user.get("role") != "admin"):
+        return RedirectResponse("/login", status_code=302)
+
+    if password != password2:
+        return render_template("register.html", {"error": "两次密码不一致", "first_user": first_user})
+    if len(password) < 6:
+        return render_template("register.html", {"error": "密码至少 6 位", "first_user": first_user})
+
+    actual_role = "admin" if first_user else role
+    ok = _auth.create_user(username, password, actual_role)
+    if not ok:
+        return render_template("register.html", {"error": "用户名已存在", "first_user": first_user})
+
+    if first_user:
+        token = _auth.login(username, password)
+        resp = RedirectResponse("/", status_code=302)
+        resp.set_cookie(_auth.COOKIE_NAME, token, httponly=True, max_age=7 * 24 * 3600, samesite="lax")
+        return resp
+    return RedirectResponse("/users", status_code=302)
+
+
+@app.get("/users", response_class=HTMLResponse)
+async def page_users(request: Request):
+    user = _get_current_user(request)
+    if user is None or user.get("role") != "admin":
+        raise HTTPException(403, "仅管理员可访问")
+    return render_template("users.html", {
+        "users": _auth.list_users(),
+        "current_user": user.get("username"),
+        "active": "settings",
+    }, request)
+
+
+@app.delete("/api/users/{username}")
+async def api_delete_user(username: str, request: Request):
+    user = _get_current_user(request)
+    if user is None or user.get("role") != "admin":
+        raise HTTPException(403, "权限不足")
+    if username == user.get("username"):
+        raise HTTPException(400, "不能删除自己")
+    ok = _auth.delete_user(username)
+    if not ok:
+        raise HTTPException(404, "用户不存在")
+    return JSONResponse({"ok": True})
 
 
 # ── API: Sites ─────────────────────────────────────────────────────────────
@@ -215,9 +352,11 @@ async def api_save_site(
     label: str = Form(...),
     prometheus_url: str = Form(...),
     es_url: str = Form(""),
+    original_label: str = Form(""),
 ):
+    lookup_label = original_label.strip() or label
     cs.save_site({"label": label, "prometheus_url": prometheus_url,
-                  "es_url": es_url or None})
+                  "es_url": es_url or None}, lookup_label=lookup_label)
     return JSONResponse({"ok": True})
 
 
@@ -534,9 +673,10 @@ async def api_test_prom(promql: str = Form(...)):
             if isinstance(r, dict) and "value" in r:
                 inst = r.get("metric", {}).get("instance", "")
                 samples.append({"instance": inst, "value": r["value"][1]})
-        return JSONResponse({"ok": True, "count": len(results), "samples": samples})
+        return JSONResponse({"ok": True, "count": len(results), "samples": samples,
+                              "log_path": get_log_path()})
     except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)})
+        return JSONResponse({"ok": False, "error": str(exc), "log_path": get_log_path()})
 
 
 @app.post("/api/test/es")
@@ -569,9 +709,9 @@ async def api_test_es(
             data = resp.json()
         total_obj = data.get("hits", {}).get("total", 0)
         total = total_obj["value"] if isinstance(total_obj, dict) else int(total_obj)
-        return JSONResponse({"ok": True, "total": total})
+        return JSONResponse({"ok": True, "total": total, "log_path": get_log_path()})
     except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)})
+        return JSONResponse({"ok": False, "error": str(exc), "log_path": get_log_path()})
 
 
 # ── Cron page ─────────────────────────────────────────────────────────────
@@ -585,7 +725,7 @@ async def page_cron(request: Request):
         for j in _scheduler.get_jobs():
             nrt = j.next_run_time
             next_runs[j.id] = nrt.strftime("%Y-%m-%d %H:%M") if nrt else "—"
-    return render_template("cron.html", {"jobs": jobs, "next_runs": next_runs, "active": "cron"})
+    return render_template("cron.html", {"jobs": jobs, "next_runs": next_runs, "active": "cron"}, request)
 
 
 # ── API: Cron Jobs ─────────────────────────────────────────────────────────
@@ -729,11 +869,11 @@ async def api_test_table(
             database="information_schema", connect_timeout=5, charset="utf8mb4",
         )
         conn.close()
-        return JSONResponse({"ok": True, "msg": "连接成功"})
+        return JSONResponse({"ok": True, "msg": "连接成功", "log_path": get_log_path()})
     except ImportError:
-        return JSONResponse({"ok": False, "error": "pymysql 未安装"})
+        return JSONResponse({"ok": False, "error": "pymysql 未安装", "log_path": get_log_path()})
     except Exception as exc:
-        return JSONResponse({"ok": False, "error": str(exc)})
+        return JSONResponse({"ok": False, "error": str(exc), "log_path": get_log_path()})
 
 
 # ── API: 触发巡检（SSE 流式输出）─────────────────────────────────────────
@@ -758,6 +898,7 @@ async def api_inspect(
             def emit(msg: str):
                 q.put(f"data: {msg}\n\n")
 
+            emit("PROGRESS:0")
             emit("⏳ 加载配置...")
             cfg = load_config("config.yaml")
 
@@ -781,6 +922,7 @@ async def api_inspect(
             if batch_win:
                 emit(f"⚠️ 当前处于批处理窗口：{batch_win.label}")
 
+            emit("PROGRESS:25")
             emit(f"📡 采集各机房数据（{mode} 模式）...")
             site_results = collect_sites(cfg, mode=mode,
                                          period_start=period_start,
@@ -788,6 +930,7 @@ async def api_inspect(
             for s in site_results:
                 emit(f"  ✅ {s.label}：{s.anomaly_count} 项异常")
 
+            emit("PROGRESS:50")
             if skip_llm.lower() == "true":
                 emit("⏭️ 跳过 AI 分析")
                 ai_analysis = "_已跳过 AI 分析。_"
@@ -797,12 +940,16 @@ async def api_inspect(
                                       period_start, period_end)
                 emit("  ✅ AI 分析完成")
 
+            emit("PROGRESS:75")
             emit("📄 生成报告...")
             out_path = reporter.render(site_results, ai_analysis, cfg,
                                        period_start, period_end, fmt=fmt)
+            emit("PROGRESS:100")
             emit(f"DONE:{out_path.name}")
+            emit(f"LOGPATH:{get_log_path()}")
         except Exception as exc:
             q.put(f"data: ERROR:{exc}\n\n")
+            q.put(f"data: LOGPATH:{get_log_path()}\n\n")
         finally:
             q.put(None)
 
@@ -855,6 +1002,16 @@ async def delete_report(filename: str):
         raise HTTPException(404, "报告不存在")
     path.unlink()
     return JSONResponse({"ok": True})
+
+
+# ── API: 系统日志 ──────────────────────────────────────────────────────────
+
+@app.get("/api/logs")
+async def api_get_logs(lines: int = 200):
+    return JSONResponse({
+        "log_path": get_log_path(),
+        "lines": tail_log(lines),
+    })
 
 
 # ── 内部辅助 ───────────────────────────────────────────────────────────────

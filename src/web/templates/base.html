@@ -92,8 +92,26 @@
   </div><!-- /.nav-section -->
 
   <div class="sidebar-footer">
-    <a href="#" onclick="openModal('modal-about');return false" style="color:var(--text-muted);font-size:12.5px">
-      <span class="nav-icon ni-gray">👤</span> 关于作者
+    {% if current_user %}
+    <div style="display:flex;flex-direction:column;gap:.35rem">
+      <div style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:.35rem">
+        <span>👤</span>
+        <span>{{ current_user.username }}
+          {% if current_user.role == 'admin' %}<span class="badge" style="font-size:10px;padding:1px 5px;margin-left:3px">管理员</span>{% endif %}
+        </span>
+        {% if current_user.role == 'admin' %}
+        <a href="/users" style="color:var(--text-muted);margin-left:auto;font-size:11px">管理</a>
+        {% endif %}
+      </div>
+      <form method="POST" action="/logout" style="margin:0">
+        <button type="submit" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:12px;padding:0;text-align:left">
+          🚪 注销登录
+        </button>
+      </form>
+    </div>
+    {% endif %}
+    <a href="#" onclick="openModal('modal-about');return false" style="color:var(--text-muted);font-size:12.5px;margin-top:.5rem;display:block">
+      <span class="nav-icon ni-gray">ℹ️</span> 关于作者
     </a>
   </div>
 
@@ -154,14 +172,23 @@ async function del(url, confirmMsg, reload){
   if(!confirm(confirmMsg)) return;
   const r = await fetch(url,{method:'DELETE'});
   if(r.ok){ if(reload) location.reload(); }
-  else alert('删除失败');
+  else {
+    let msg = '删除失败';
+    try { const e=await r.json(); if(e.detail) msg+='：'+e.detail; if(e.log_path) msg+='\n\n详细日志: '+e.log_path; } catch(e2){}
+    alert(msg);
+  }
 }
 
 async function postForm(url, formId, successMsg){
   const form = document.getElementById(formId);
   const r = await fetch(url,{method:'POST',body:new FormData(form)});
   if(r.ok){ alert(successMsg||'保存成功'); location.reload(); }
-  else { const e=await r.json(); alert('失败: '+(e.detail||r.status)); }
+  else {
+    const e=await r.json().catch(()=>({}));
+    let msg='失败: '+(e.detail||r.status);
+    if(e.log_path) msg+='\n\n详细日志: '+e.log_path;
+    alert(msg);
+  }
 }
 
 function fillForm(formId, data){

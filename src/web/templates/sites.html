@@ -20,7 +20,8 @@
       <td class="text-muted">{{ s.es_url or '（使用全局）' }}</td>
       <td class="actions">
         <button class="btn btn-outline btn-sm" onclick="editSite({{ s | tojson }})">编辑</button>
-        <button class="btn btn-danger btn-sm" onclick="del('/api/sites/{{ s.label }}','确定删除机房「{{ s.label }}」？',true)">删除</button>
+        <button class="btn btn-outline btn-sm" onclick="copySite({{ s | tojson }})">复制</button>
+        <button class="btn btn-danger btn-sm" onclick="del('/api/sites/' + encodeURIComponent('{{ s.label }}'),'确定删除机房「{{ s.label }}」？',true)">删除</button>
       </td>
     </tr>
     {% endfor %}
@@ -39,9 +40,10 @@
   <div class="modal">
     <div class="modal-title" id="modal-title">添加机房</div>
     <form id="form-site">
+      <input type="hidden" name="original_label" id="site-original-label">
       <div class="form-group">
         <label>机房名称 <span style="color:red">*</span></label>
-        <input name="label" required placeholder="如：东坝、南法信、合肥">
+        <input name="label" id="site-label" required placeholder="如：东坝、南法信、合肥">
         <div class="form-hint">唯一标识，不可与已有机房重名</div>
       </div>
       <div class="form-group">
@@ -63,10 +65,25 @@
 
 {% block scripts %}
 <script>
-function editSite(s){
-  document.getElementById('modal-title').textContent = '编辑机房：' + s.label;
-  fillForm('form-site', s);
+function _openSiteModal(title, s, editMode){
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('form-site').reset();
+  document.getElementById('site-original-label').value = '';
+  const labelEl = document.getElementById('site-label');
+  labelEl.readOnly = false;
+  if(s) fillForm('form-site', s);
+  if(editMode && s){
+    labelEl.readOnly = true;
+    document.getElementById('site-original-label').value = s.label;
+  }
   openModal('modal-add');
+}
+function editSite(s){
+  _openSiteModal('编辑机房：' + s.label, s, true);
+}
+function copySite(s){
+  const copy = Object.assign({}, s, {label: s.label + '_copy'});
+  _openSiteModal('复制机房：' + s.label, copy, false);
 }
 async function saveSite(){
   await postForm('/api/sites','form-site','机房已保存');

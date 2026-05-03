@@ -42,13 +42,14 @@ def list_sites() -> list[dict]:
     return raw.get("sites") or raw.get("datacenters", [])
 
 
-def save_site(site: dict) -> None:
+def save_site(site: dict, lookup_label: str | None = None) -> None:
     raw = _load_raw()
     # 兼容 datacenters 和 sites
     key = "datacenters" if "datacenters" in raw else "sites"
     sites: list[dict] = raw.setdefault(key, [])
+    match_label = lookup_label or site.get("label") or site.get("name")
     for i, s in enumerate(sites):
-        if s.get("label") == site.get("label") or s.get("name") == site.get("name"):
+        if s.get("label") == match_label or s.get("name") == match_label:
             sites[i] = site
             _save_raw(raw)
             return

@@ -9,6 +9,7 @@
   <div class="tab" data-tab-group="s" data-tab="llm" onclick="switchTab('s','llm')">AI 分析</div>
   <div class="tab" data-tab-group="s" data-tab="notify" onclick="switchTab('s','notify')">通知</div>
   <div class="tab" data-tab-group="s" data-tab="tablemon" onclick="switchTab('s','tablemon')">表规模监控</div>
+  <div class="tab" data-tab-group="s" data-tab="syslog" onclick="switchTab('s','syslog')">系统日志</div>
 </div>
 
 {% set datasources = raw.get('datasources', []) %}
@@ -397,6 +398,20 @@
   </div>
 </div>
 
+<!-- ===== 系统日志 ===== -->
+<div class="tab-pane" data-pane-group="s" data-pane="syslog">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+    <div>
+      <span style="font-weight:600;font-size:.9375rem">运行日志</span>
+      <span class="text-muted" id="log-path-label" style="font-size:.82rem;margin-left:.75rem"></span>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="refreshLogs()">🔄 刷新</button>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <pre id="log-content" style="margin:0;padding:1rem;font-size:.78rem;line-height:1.55;max-height:520px;overflow-y:auto;background:var(--bg);color:var(--text);white-space:pre-wrap;word-break:break-all">（点击"刷新"加载最近日志）</pre>
+  </div>
+</div>
+
 <!-- Modal: 添加/编辑数据源 -->
 <div class="modal-backdrop" id="modal-ds" onclick="if(event.target===this)closeModal('modal-ds')">
   <div class="modal">
@@ -622,6 +637,22 @@ async function saveTq(){
 document.getElementById('modal-tq').addEventListener('click', function(e){
   if(e.target === this){ closeModal('modal-tq'); document.getElementById('tq-name').readOnly = false; }
 });
+
+// ── 系统日志 ─────────────────────────────────────────────────────────────────
+async function refreshLogs(){
+  const pre = document.getElementById('log-content');
+  const label = document.getElementById('log-path-label');
+  pre.textContent = '加载中…';
+  try {
+    const r = await fetch('/api/logs?lines=200');
+    const data = await r.json();
+    if(data.log_path) label.textContent = data.log_path;
+    pre.textContent = data.lines.length ? data.lines.join('\n') : '（日志文件为空）';
+    pre.scrollTop = pre.scrollHeight;
+  } catch(e) {
+    pre.textContent = '加载失败: ' + e;
+  }
+}
 
 // ── 通知 ────────────────────────────────────────────────────────────────────
 async function saveNotifier(type, formId){

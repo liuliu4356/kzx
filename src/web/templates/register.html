@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>注册 — 三思GDB巡检平台</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+.auth-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
+.auth-card{width:380px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:2rem 2rem 1.5rem}
+.auth-logo{text-align:center;margin-bottom:1.5rem}
+.auth-logo .logo-icon{font-size:2rem;margin-bottom:.4rem}
+.auth-title{font-size:1.125rem;font-weight:700;color:var(--text);margin-bottom:.25rem;text-align:center}
+.auth-sub{font-size:.85rem;color:var(--text-muted);text-align:center;margin-bottom:1.5rem}
+.auth-footer{margin-top:1rem;text-align:center;font-size:.82rem;color:var(--text-muted)}
+</style>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="logo-icon">🔍</div>
+      <div class="auth-title">创建账户</div>
+      <div class="auth-sub">{% if first_user %}首次使用，注册管理员账户{% else %}由管理员创建新账户{% endif %}</div>
+    </div>
+    {% if error %}
+    <div class="alert alert-danger" style="margin-bottom:1rem">{{ error }}</div>
+    {% endif %}
+    <form method="POST" action="/register">
+      <div class="form-group">
+        <label>用户名</label>
+        <input name="username" required autofocus placeholder="请输入用户名">
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input name="password" type="password" required placeholder="至少 6 位">
+      </div>
+      <div class="form-group">
+        <label>确认密码</label>
+        <input name="password2" type="password" required placeholder="再次输入密码">
+      </div>
+      {% if not first_user %}
+      <div class="form-group">
+        <label>角色</label>
+        <select name="role">
+          <option value="viewer">viewer（只读）</option>
+          <option value="admin">admin（管理员）</option>
+        </select>
+      </div>
+      {% else %}
+      <input type="hidden" name="role" value="admin">
+      {% endif %}
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:.5rem">注册</button>
+    </form>
+    <div class="auth-footer"><a href="/login">已有账户？返回登录</a></div>
+  </div>
+</div>
+</body>
+</html>

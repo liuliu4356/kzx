@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}用户管理 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}用户管理{% endblock %}
+{% block page_subtitle %}管理平台用户账户与权限{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+  <a href="/register" class="btn btn-primary">＋ 添加用户</a>
+</div>
+
+{% if users %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead><tr><th>用户名</th><th>角色</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for u in users %}
+    <tr>
+      <td><strong>{{ u.username }}</strong></td>
+      <td>
+        {% if u.role == 'admin' %}
+        <span class="badge badge-active">管理员</span>
+        {% else %}
+        <span class="badge">只读</span>
+        {% endif %}
+      </td>
+      <td class="actions">
+        {% if u.username != current_user %}
+        <button class="btn btn-danger btn-sm" onclick="del('/api/users/{{ u.username }}','确认删除用户「{{ u.username }}」？',true)">删除</button>
+        {% else %}
+        <span class="text-muted" style="font-size:.82rem">（当前用户）</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">
+  <div class="empty-icon">👤</div>
+  <p>还没有用户。</p>
+</div>
+{% endif %}
+
+{% endblock %}

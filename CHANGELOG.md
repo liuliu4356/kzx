@@ -4,6 +4,28 @@
 
 ---
 
+## v1.7.0 (2026-05-03) - 多用户认证 / 机房管理优化 / 进度显示 / 安装脚本 / 调试日志
+
+### 新增功能
+
+- **多用户认证**：注册/登录/注销，支持 admin/viewer 两种角色；首次启动引导注册管理员账户；会话 Cookie（7天有效期，pbkdf2 密码哈希）
+- **机房管理修复**：编辑时 label 只读（避免覆盖问题）；删除路径修正；新增"复制"功能（快速克隆机房配置）
+- **巡检进度百分比**：SSE 流实时推送 0%→25%→50%→75%→100%，进度条旁直观显示当前进度
+- **安装脚本（在线/离线）**：`scripts/install.sh`（Linux/macOS，自动检测 Python 3.10+）、`scripts/install.bat`（Windows）；`scripts/build_offline_package.sh` + `scripts/install_offline.sh` 支持离线部署
+- **调试日志**：新增 `src/logging_setup.py`（RotatingFileHandler 10MB×5）；设置页新增"系统日志"Tab，可查看最近200行；巡检结束 SSE 推送日志文件路径；测试连接响应包含 `log_path`；全局错误弹框附带日志路径
+
+### 新增文件
+
+- `src/logging_setup.py` — 集中日志配置模块
+- `src/web/auth.py` — 多用户认证（users.json 存储）
+- `src/web/templates/login.html` — 登录页
+- `src/web/templates/register.html` — 注册页
+- `src/web/templates/users.html` — 用户管理页
+- `scripts/install.sh` / `scripts/install.bat` — 在线安装脚本
+- `scripts/install_online.sh` / `scripts/install_offline.sh` / `scripts/build_offline_package.sh` — 离线部署工具
+
+---
+
 ## v1.5.0 (2026-05-03) - GDB 组件专项监控
 
 ### 新增监控指标（config.example.yaml）

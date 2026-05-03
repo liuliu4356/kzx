@@ -13,6 +13,7 @@ from .collectors import collect_sites
 from .analyzer import analyze
 from . import reporter
 from . import notifiers
+from .logging_setup import setup as setup_logging
 
 _PERIOD_CHOICES = click.Choice(["instant", "1d", "1w"])
 
@@ -74,6 +75,7 @@ def init_config(force: bool) -> None:
 def inspect(config_path: str, output_dir: str | None, period: str,
             start: str | None, end: str | None,
             skip_llm: bool, notify: bool, fmt: str) -> None:
+    setup_logging()
     load_dotenv()
     cfg = load_config(config_path)
     if output_dir:
@@ -135,12 +137,13 @@ def inspect(config_path: str, output_dir: str | None, period: str,
 @click.option("--reload", is_flag=True, help="开发模式热重载")
 def web(host: str, port: int, reload: bool) -> None:
     """启动 Web 可视化管理界面。"""
+    setup_logging()
     try:
         import uvicorn
     except ImportError:
         click.echo("请先安装 web 依赖: pip install fastapi uvicorn[standard] python-multipart", err=True)
         sys.exit(1)
-    click.echo(f"🌐 Web 界面启动: http://{host}:{port}")
+    click.echo(f"Web 界面启动: http://{host}:{port}")
     uvicorn.run("src.web.app:app", host=host, port=port, reload=reload)
 
 
