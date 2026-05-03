@@ -141,7 +141,31 @@ h1{font-size:1.5rem;font-weight:700;margin-bottom:.25rem;}
 
 {% else %}
 {# ═══ 快照模式 ═══ #}
-<div class="section-title">Prometheus 指标</div>
+{% set _components = ["omm","mds","cm","pm","rdb","gtm","dbproxy","backup","system"] %}
+{% set _comp_labels = {"omm":"OMM","mds":"MDS","cm":"CM","pm":"PM","rdb":"RDB","gtm":"GTM","dbproxy":"DBProxy","backup":"Backup","system":"系统"} %}
+{% set _ns = namespace(has_comp=false) %}
+{% for comp in _components %}{% set cr = s.prom_results | selectattr("component","eq",comp) | list %}{% if cr %}{% set _ns.has_comp = true %}{% endif %}{% endfor %}
+{% if _ns.has_comp %}
+<div class="section-title">GDB 组件健康概览</div>
+<table class="summary-table">
+<thead><tr><th>组件</th><th>状态</th><th>异常指标</th></tr></thead>
+<tbody>
+{% for comp in _components %}
+  {% set comp_r = s.prom_results | selectattr("component","eq",comp) | list %}
+  {% set comp_a = comp_r | selectattr("is_anomaly") | list %}
+  {% if comp_r %}
+<tr>
+  <td><strong>{{ _comp_labels[comp] }}</strong></td>
+  <td>{% if comp_a %}<span class="badge badge-err">🔴 异常</span>{% else %}<span class="badge badge-ok">🟢 正常</span>{% endif %}</td>
+  <td style="font-size:.8125rem;color:{% if comp_a %}var(--red){% else %}var(--gray){% endif %}">{{ comp_a | map(attribute="name") | join(", ") or "—" }}</td>
+</tr>
+  {% endif %}
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+
+<div class="section-title" style="margin-top:1.25rem">Prometheus 指标</div>
 <table class="summary-table">
 <thead><tr><th>说明</th><th>指标</th><th>当前值</th><th>阈值</th><th>状态</th><th>错误</th></tr></thead>
 <tbody>

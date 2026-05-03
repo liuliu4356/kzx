@@ -49,6 +49,27 @@
 
 {% else %}
 {# ═══════════════════ 快照模式 ═══════════════════ #}
+### GDB 组件健康概览
+
+{% set _components = ["omm","mds","cm","pm","rdb","gtm","dbproxy","backup","system"] -%}
+{% set _comp_labels = {"omm":"OMM","mds":"MDS","cm":"CM","pm":"PM","rdb":"RDB","gtm":"GTM","dbproxy":"DBProxy","backup":"Backup","system":"系统"} -%}
+{% set _ns = namespace(has_comp=false) -%}
+{% for comp in _components -%}
+  {% set comp_r = s.prom_results | selectattr("component","eq",comp) | list -%}
+  {% if comp_r %}{% set _ns.has_comp = true %}{% endif -%}
+{% endfor -%}
+{% if _ns.has_comp %}
+| 组件 | 状态 | 异常指标 |
+|---|---|---|
+{% for comp in _components -%}
+  {% set comp_r = s.prom_results | selectattr("component","eq",comp) | list -%}
+  {% set comp_a = comp_r | selectattr("is_anomaly") | list -%}
+  {% if comp_r -%}
+| {{ _comp_labels[comp] }} | {{ "🔴 异常" if comp_a else "🟢 正常" }} | {{ comp_a | map(attribute="name") | join(", ") or "—" }} |
+  {% endif -%}
+{% endfor %}
+{% endif %}
+
 ### Prometheus 指标
 
 | 说明 | 指标 | 值 | 阈值 | 状态 | 错误 |

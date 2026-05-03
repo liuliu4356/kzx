@@ -20,6 +20,8 @@ class PromResult:
     timestamp: str
     faq: str = ""
     description: str = ""
+    component: str = "system"
+    severity: str = "warning"
 
 
 def _is_anomaly(value: float, threshold: float, anomaly_when: str) -> bool:

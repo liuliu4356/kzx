@@ -18,6 +18,8 @@ class PromQuery:
     anomaly_when: Literal["gt", "lt"] = "gt"
     description: str = ""   # 指标说明，Web UI 展示用
     faq: str = ""           # 异常处理 FAQ，出现异常时写入报告
+    component: str = "system"   # 所属组件：omm/mds/cm/pm/rdb/gtm/dbproxy/backup/system
+    severity: str = "warning"   # 严重级别：critical / warning / info
 
 
 @dataclass
@@ -139,6 +141,8 @@ def load_config(path: str | Path) -> Config:
                 anomaly_when=q.get("anomaly_when", "gt"),
                 description=q.get("description", ""),
                 faq=q.get("faq", ""),
+                component=q.get("component", "system"),
+                severity=q.get("severity", "warning"),
             )
             for q in p.get("queries", [])
         ],

@@ -33,6 +33,8 @@ class PromRangeResult:
     error: str | None = None
     faq: str = ""
     description: str = ""
+    component: str = "system"
+    severity: str = "warning"
 
     @property
     def is_anomaly(self) -> bool:

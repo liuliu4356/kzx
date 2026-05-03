@@ -27,7 +27,7 @@ def render(
     template_name = "report.html.j2" if fmt == "html" else "report.md.j2"
     tmpl = env.get_template(template_name)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now().astimezone()
     mode = site_results[0].mode if site_results else "instant"
     total_anomaly_count = sum(s.anomaly_count for s in site_results)
 
@@ -37,20 +37,26 @@ def render(
                       f"{period_end.strftime('%Y-%m-%d %H:%M')} UTC"
                       f"（步长 {cfg.inspection.step_minutes} 分钟）")
 
-    # 将 faq / description 从 config 注入到各 Result 对象（按 name 匹配）
+    # 将 faq / description / component / severity 从 config 注入到各 Result 对象（按 name 匹配）
     faq_map: dict[str, str] = {q.name: q.faq for q in cfg.prometheus.queries}
     desc_map: dict[str, str] = {q.name: q.description for q in cfg.prometheus.queries}
+    comp_map: dict[str, str] = {q.name: q.component for q in cfg.prometheus.queries}
+    sev_map: dict[str, str] = {q.name: q.severity for q in cfg.prometheus.queries}
     for s in site_results:
         for r in s.prom_results:
             if not getattr(r, "faq", ""):
                 r.faq = faq_map.get(r.name, "")  # type: ignore[attr-defined]
             if not getattr(r, "description", ""):
                 r.description = desc_map.get(r.name, "")  # type: ignore[attr-defined]
+            r.component = comp_map.get(r.name, "system")  # type: ignore[attr-defined]
+            r.severity = sev_map.get(r.name, "warning")  # type: ignore[attr-defined]
         for r in s.prom_range_results:
             if not getattr(r, "faq", ""):
                 r.faq = faq_map.get(r.name, "")  # type: ignore[attr-defined]
             if not getattr(r, "description", ""):
                 r.description = desc_map.get(r.name, "")  # type: ignore[attr-defined]
+            r.component = comp_map.get(r.name, "system")  # type: ignore[attr-defined]
+            r.severity = sev_map.get(r.name, "warning")  # type: ignore[attr-defined]
 
     es_faq_map: dict[str, str] = {q.name: q.faq for q in cfg.elasticsearch.queries}
     es_desc_map: dict[str, str] = {q.name: q.description for q in cfg.elasticsearch.queries}
@@ -62,7 +68,7 @@ def render(
                 r.description = es_desc_map.get(r.name, "")  # type: ignore[attr-defined]
 
     content = tmpl.render(
-        generated_at=now.strftime("%Y-%m-%d %H:%M UTC"),
+        generated_at=now.strftime("%Y-%m-%d %H:%M"),
         model=cfg.llm.model,
         mode=mode,
         period_str=period_str,

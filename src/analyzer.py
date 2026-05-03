@@ -12,6 +12,25 @@ from .config import BatchWindow, LLMConfig
 SYSTEM_PROMPT = """你是一位资深 SRE 巡检助手，负责审阅基于 Prometheus 指标与 Elasticsearch 日志的系统巡检数据。
 数据可能来自多个机房，支持快照（instant）和时间段审计（range）两种模式。
 
+## GoldenDB 组件架构（用于根因判断）
+
+GoldenDB 分布式数据库的组件依赖关系如下：
+- **OMM**（主控节点）：集群大脑，负责全局协调。OMM 异常会导致 CM/PM 无法工作。
+- **MDS**（元数据服务）：存储分区/副本映射。MDS 异常导致查询路由失败，影响 DBProxy 和业务连接。
+- **CM**（集群管理）：负责节点心跳和故障检测。CM 异常可能引发误判 RDB 下线，导致副本数不足。
+- **PM**（分区管理）：管理数据分区分配。PM 异常导致分区副本因子下降告警。
+- **GTM**（全局事务管理器）：主备同步。GTM 延迟高通常是网络带宽或写入压力过大。
+- **RDB**（存储节点）：实际数据存储。RDB 同步延迟高表示从节点追不上主节点写入速度。
+- **DBProxy**（数据库代理）：SQL 路由层，连接池满或错误率高说明业务压力大或存在连接泄漏。
+- **Backup**（备份进程）：arm_backup_mysql，备份进程不存活需立即检查 cron 配置和日志。
+
+**根因推断规则**：
+- OMM down → 所有组件可能级联异常，优先级 P0
+- MDS down → DBProxy 连接失败（路由表无法更新）
+- CM down → 可能触发 RDB 副本数告警
+- GTM 延迟高 + 批处理窗口 → 已知现象，降级为 P2
+- 副本数不足 → 排查是否有 RDB 节点下线
+
 请严格按以下 Markdown 结构输出（不要添加其他节）：
 
 ## 健康度评分
@@ -22,10 +41,12 @@ SYSTEM_PROMPT = """你是一位资深 SRE 巡检助手，负责审阅基于 Prom
 - 列出需要关注的指标或日志（若无异常，写"无"）。
 - range 模式：注明机房、指标名、异常时间段、节点IP、峰值、阈值、持续时长。
 - instant 模式：注明机房、来源（metric/log）、名称、当前值、阈值。
+- 如有 GDB 组件异常，注明所属组件（component 字段）并推断级联影响。
 
 ## 建议动作
 - 针对异常项给出可执行的排查或修复动作。
 - 按优先级 P0 / P1 / P2 标注。
+- GDB 组件存活类（severity=critical）异常一律 P0。
 
 ## 总结
 - 3-5 句话结论。
@@ -48,7 +69,9 @@ def _build_instant_payload(site_results: list[SiteResult],
             "site": s.label,
             "prometheus": [
                 {"name": r.name, "value": r.value, "threshold": r.threshold,
-                 "unit": r.unit, "is_anomaly": r.is_anomaly, "error": r.error}
+                 "unit": r.unit, "is_anomaly": r.is_anomaly, "error": r.error,
+                 "component": getattr(r, "component", "system"),
+                 "severity": getattr(r, "severity", "warning")}
                 for r in s.prom_results
             ],
             "elasticsearch": [
