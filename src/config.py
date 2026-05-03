@@ -97,6 +97,28 @@ class BatchWindow:
 
 
 @dataclass
+class TableQuery:
+    name: str
+    database: str
+    table: str
+    size_threshold_gb: float = 100.0
+    row_threshold: int = 0         # 0 = 不检查行数
+    description: str = ""
+    faq: str = ""
+
+
+@dataclass
+class TableMonitorConfig:
+    enabled: bool = False
+    host: str = ""
+    port: int = 3306
+    user: str = ""
+    password_env: str = "GDB_MONITOR_DB_PASS"
+    timeout_sec: int = 10
+    queries: list[TableQuery] = field(default_factory=list)
+
+
+@dataclass
 class Config:
     prometheus: PromConfig
     elasticsearch: ESConfig
@@ -106,6 +128,7 @@ class Config:
     batch_windows: list[BatchWindow] = field(default_factory=list)
     sites: list[SiteConfig] = field(default_factory=list)
     inspection: InspectionConfig = field(default_factory=InspectionConfig)
+    table_monitor: TableMonitorConfig = field(default_factory=TableMonitorConfig)
 
 
 def current_batch_window(windows: list[BatchWindow]) -> BatchWindow | None:
@@ -222,9 +245,31 @@ def load_config(path: str | Path) -> Config:
         step_minutes=int(insp_raw.get("step_minutes", 5)),
     )
 
+    tm_raw = raw.get("table_monitor", {})
+    table_monitor = TableMonitorConfig(
+        enabled=bool(tm_raw.get("enabled", False)),
+        host=tm_raw.get("host", ""),
+        port=int(tm_raw.get("port", 3306)),
+        user=tm_raw.get("user", ""),
+        password_env=tm_raw.get("password_env", "GDB_MONITOR_DB_PASS"),
+        timeout_sec=int(tm_raw.get("timeout_sec", 10)),
+        queries=[
+            TableQuery(
+                name=q["name"],
+                database=q["database"],
+                table=q["table"],
+                size_threshold_gb=float(q.get("size_threshold_gb", 100.0)),
+                row_threshold=int(q.get("row_threshold", 0)),
+                description=q.get("description", ""),
+                faq=q.get("faq", ""),
+            )
+            for q in tm_raw.get("queries", [])
+        ],
+    )
+
     return Config(prometheus=prom, elasticsearch=es, llm=llm, report=report,
                   notifiers=notifiers, batch_windows=batch_windows,
-                  sites=sites, inspection=inspection)
+                  sites=sites, inspection=inspection, table_monitor=table_monitor)
 
 
 def get_es_auth(cfg: ESConfig) -> tuple[str, str] | None:

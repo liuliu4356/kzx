@@ -551,6 +551,79 @@ async def api_test_es(
         return JSONResponse({"ok": False, "error": str(exc)})
 
 
+# ── API: Table Monitor ────────────────────────────────────────────────────
+
+@app.get("/api/table-monitor")
+async def api_get_table_monitor():
+    return JSONResponse(cs.get_table_monitor())
+
+
+@app.post("/api/table-monitor/settings")
+async def api_save_table_monitor_settings(
+    enabled: str = Form("false"),
+    host: str = Form(""),
+    port: int = Form(3306),
+    user: str = Form(""),
+    password_env: str = Form("GDB_MONITOR_DB_PASS"),
+    timeout_sec: int = Form(10),
+):
+    cs.save_table_monitor_settings({
+        "enabled": enabled.lower() == "true",
+        "host": host, "port": port, "user": user,
+        "password_env": password_env, "timeout_sec": timeout_sec,
+    })
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/table-monitor/queries")
+async def api_save_table_query(
+    name: str = Form(...),
+    database: str = Form(...),
+    table: str = Form(...),
+    size_threshold_gb: float = Form(100.0),
+    row_threshold: int = Form(0),
+    description: str = Form(""),
+    faq: str = Form(""),
+):
+    cs.save_table_query({
+        "name": name, "database": database, "table": table,
+        "size_threshold_gb": size_threshold_gb, "row_threshold": row_threshold,
+        "description": description, "faq": faq,
+    })
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/table-monitor/queries/{name}")
+async def api_delete_table_query(name: str):
+    ok = cs.delete_table_query(name)
+    if not ok:
+        raise HTTPException(404, "监控表不存在")
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/test/table")
+async def api_test_table(
+    host: str = Form(""),
+    port: int = Form(3306),
+    user: str = Form(""),
+    password_env: str = Form("GDB_MONITOR_DB_PASS"),
+):
+    import os as _os
+    password = _os.environ.get(password_env, "")
+    try:
+        import pymysql
+        conn = pymysql.connect(
+            host=host or "localhost", port=port, user=user, password=password,
+            database="information_schema", connect_timeout=5, charset="utf8mb4",
+        )
+        conn.close()
+        return JSONResponse({"ok": True, "msg": "连接成功"})
+    except ImportError:
+        return JSONResponse({"ok": False, "error": "pymysql 未安装"})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+
 # ── API: 触发巡检（SSE 流式输出）─────────────────────────────────────────
 
 @app.post("/api/inspect")

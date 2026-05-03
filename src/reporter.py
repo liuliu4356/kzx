@@ -76,6 +76,7 @@ def render(
         total_anomaly_count=total_anomaly_count,
         ai_analysis=ai_analysis,
         kibana_url=cfg.elasticsearch.kibana_url.rstrip("/"),
+        table_monitor_enabled=cfg.table_monitor.enabled,
     )
 
     output_dir = Path(cfg.report.output_dir)

@@ -227,6 +227,42 @@ def save_notifier(notifier: dict) -> None:
     _save_raw(raw)
 
 
+# ── Table Monitor ──────────────────────────────────────────────────────────
+
+def get_table_monitor() -> dict:
+    return _load_raw().get("table_monitor", {})
+
+
+def save_table_monitor_settings(settings: dict) -> None:
+    raw = _load_raw()
+    tm = raw.setdefault("table_monitor", {})
+    tm.update(settings)
+    _save_raw(raw)
+
+
+def save_table_query(q: dict) -> None:
+    raw = _load_raw()
+    queries: list[dict] = raw.setdefault("table_monitor", {}).setdefault("queries", [])
+    for i, existing in enumerate(queries):
+        if existing["name"] == q["name"]:
+            queries[i] = q
+            _save_raw(raw)
+            return
+    queries.append(q)
+    _save_raw(raw)
+
+
+def delete_table_query(name: str) -> bool:
+    raw = _load_raw()
+    queries = raw.get("table_monitor", {}).get("queries", [])
+    before = len(queries)
+    raw.setdefault("table_monitor", {})["queries"] = [q for q in queries if q["name"] != name]
+    if len(raw["table_monitor"]["queries"]) < before:
+        _save_raw(raw)
+        return True
+    return False
+
+
 def save_prometheus_url(url: str, timeout_sec: int) -> None:
     raw = _load_raw()
     raw.setdefault("prometheus", {})["url"] = url

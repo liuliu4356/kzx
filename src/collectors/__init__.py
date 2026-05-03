@@ -8,6 +8,7 @@ from ..config import Config, ESConfig, PromConfig
 from .elasticsearch import ESResult, collect as es_collect
 from .prometheus import PromResult, collect as prom_collect
 from .prometheus_range import PromRangeResult, collect_range
+from .table_size import TableSizeResult
 
 
 @dataclass
@@ -17,12 +18,16 @@ class SiteResult:
     prom_results: list[PromResult] = field(default_factory=list)
     prom_range_results: list[PromRangeResult] = field(default_factory=list)
     es_results: list[ESResult] = field(default_factory=list)
+    table_size_results: list[TableSizeResult] = field(default_factory=list)
 
     @property
     def anomaly_count(self) -> int:
+        base = 0
         if self.mode == "range":
-            return sum(1 for r in self.prom_range_results if r.is_anomaly)
-        return sum(1 for r in self.prom_results if r.is_anomaly)
+            base = sum(1 for r in self.prom_range_results if r.is_anomaly)
+        else:
+            base = sum(1 for r in self.prom_results if r.is_anomaly)
+        return base + sum(1 for r in self.table_size_results if r.is_anomaly)
 
     @property
     def total_anomaly_windows(self) -> int:
@@ -61,12 +66,15 @@ def _make_site_es(cfg: Config, site_es_url: str | None,
 
 def _collect_one_instant(cfg: Config, label: str,
                          prom_url: str, es_url: str | None) -> SiteResult:
+    from .table_size import collect as table_collect
     site_prom = _make_site_prom(cfg, prom_url)
     site_es = _make_site_es(cfg, es_url)
+    table_results = table_collect(cfg.table_monitor) if cfg.table_monitor.enabled else []
     return SiteResult(
         label=label, mode="instant",
         prom_results=prom_collect(site_prom),
         es_results=es_collect(site_es),
+        table_size_results=table_results,
     )
 
 

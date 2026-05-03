@@ -8,6 +8,7 @@
   <div class="tab active" data-tab-group="s" data-tab="conn" onclick="switchTab('s','conn')">数据源连接</div>
   <div class="tab" data-tab-group="s" data-tab="llm" onclick="switchTab('s','llm')">AI 分析</div>
   <div class="tab" data-tab-group="s" data-tab="notify" onclick="switchTab('s','notify')">通知</div>
+  <div class="tab" data-tab-group="s" data-tab="tablemon" onclick="switchTab('s','tablemon')">表规模监控</div>
 </div>
 
 {% set datasources = raw.get('datasources', []) %}
@@ -264,6 +265,138 @@
   </div>
 </div>
 
+<!-- ===== 表规模监控 ===== -->
+{% set tm = raw.get('table_monitor', {}) %}
+{% set tm_queries = tm.get('queries', []) %}
+<div class="tab-pane" data-pane-group="s" data-pane="tablemon">
+  <div class="alert alert-info" style="margin-bottom:1rem">
+    监控指定数据库表的磁盘占用和行数，超阈值时在巡检报告中标注异常。需要数据库只读账号。
+  </div>
+
+  <!-- MySQL 连接配置 -->
+  <div class="notifier-section" style="margin-bottom:1.25rem">
+    <div class="notifier-header">
+      🗄️ MySQL 连接配置
+      <label style="margin-left:auto;font-weight:400;font-size:.875rem">
+        <input type="checkbox" id="tm-enabled" {% if tm.get('enabled') %}checked{% endif %}> 启用表规模监控
+      </label>
+    </div>
+    <div class="notifier-body">
+      <form id="form-tm">
+        <div class="form-row">
+          <div class="form-group">
+            <label>主机 / IP</label>
+            <input name="host" value="{{ tm.get('host','') }}" placeholder="10.0.0.1">
+          </div>
+          <div class="form-group">
+            <label>端口</label>
+            <input name="port" type="number" value="{{ tm.get('port', 3306) }}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>用户名</label>
+            <input name="user" value="{{ tm.get('user','') }}" placeholder="monitor_user">
+          </div>
+          <div class="form-group">
+            <label>密码环境变量</label>
+            <input name="password_env" value="{{ tm.get('password_env','GDB_MONITOR_DB_PASS') }}" placeholder="GDB_MONITOR_DB_PASS">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>超时（秒）</label>
+          <input name="timeout_sec" type="number" value="{{ tm.get('timeout_sec', 10) }}" style="width:100px">
+        </div>
+        <div style="display:flex;gap:.5rem">
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveTmSettings()">保存连接配置</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="testTmConn()">测试连接</button>
+        </div>
+        <div id="tm-test-result" style="margin-top:.5rem;font-size:.875rem"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 监控表列表 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+    <span style="font-weight:600;font-size:.9375rem">监控表（{{ tm_queries|length }} 个）</span>
+    <button class="btn btn-primary btn-sm" onclick="openModal('modal-tq')">＋ 添加监控表</button>
+  </div>
+
+  {% if tm_queries %}
+  <div class="card" style="padding:0;overflow:hidden">
+    <table>
+      <thead><tr>
+        <th>名称</th><th>库.表</th><th>大小阈值</th><th>行数阈值</th><th>操作</th>
+      </tr></thead>
+      <tbody>
+      {% for q in tm_queries %}
+      <tr>
+        <td><strong>{{ q.name }}</strong><br><span class="text-muted" style="font-size:.8rem">{{ q.get('description','') }}</span></td>
+        <td><code>{{ q.database }}.{{ q.table }}</code></td>
+        <td>{{ q.get('size_threshold_gb', 100) }} GB</td>
+        <td>{{ q.get('row_threshold', 0) or '—' }}</td>
+        <td class="actions">
+          <button class="btn btn-outline btn-sm" onclick='editTq({{ q | tojson }})'>编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="del('/api/table-monitor/queries/{{ q.name }}','删除监控表「{{ q.name }}」？',true)">删除</button>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card empty">
+    <div class="empty-icon">📊</div>
+    <p>还没有配置监控表。<br><span class="text-muted">点击「添加监控表」配置需要监控的大表。</span></p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Modal: 添加/编辑监控表 -->
+<div class="modal-backdrop" id="modal-tq" onclick="if(event.target===this)closeModal('modal-tq')">
+  <div class="modal">
+    <div class="modal-title" id="tq-modal-title">添加监控表</div>
+    <form id="form-tq">
+      <div class="form-row">
+        <div class="form-group">
+          <label>名称 <span style="color:red">*</span></label>
+          <input name="name" id="tq-name" required placeholder="如：order_main">
+        </div>
+        <div class="form-group">
+          <label>数据库名 <span style="color:red">*</span></label>
+          <input name="database" required placeholder="如：gdb_production">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>表名 <span style="color:red">*</span></label>
+        <input name="table" required placeholder="如：order_items">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>大小阈值（GB）</label>
+          <input name="size_threshold_gb" type="number" step="0.1" value="100">
+        </div>
+        <div class="form-group">
+          <label>行数阈值（0=不检查）</label>
+          <input name="row_threshold" type="number" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>描述</label>
+        <input name="description" placeholder="如：订单明细表">
+      </div>
+      <div class="form-group">
+        <label>FAQ（异常时展示的排查建议）</label>
+        <textarea name="faq" rows="3" style="width:100%;resize:vertical" placeholder="1. 检查是否有大量未归档数据&#10;2. 联系 DBA 执行分区裁剪"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-tq')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveTq()">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Modal: 添加/编辑数据源 -->
 <div class="modal-backdrop" id="modal-ds" onclick="if(event.target===this)closeModal('modal-ds')">
   <div class="modal">
@@ -453,6 +586,42 @@ async function updateKb(input, filename){
   else alert('更新失败');
   input.value = '';
 }
+
+// ── 表规模监控 ──────────────────────────────────────────────────────────────
+async function saveTmSettings(){
+  const form = document.getElementById('form-tm');
+  const fd = new FormData(form);
+  fd.set('enabled', document.getElementById('tm-enabled').checked ? 'true' : 'false');
+  const r = await fetch('/api/table-monitor/settings', {method:'POST', body: fd});
+  if(r.ok) alert('连接配置已保存');
+  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
+}
+async function testTmConn(){
+  const form = document.getElementById('form-tm');
+  const fd = new FormData(form);
+  const res = document.getElementById('tm-test-result');
+  res.textContent = '测试中...';
+  const r = await fetch('/api/test/table', {method:'POST', body: fd});
+  const data = await r.json();
+  res.textContent = data.ok ? '✅ ' + data.msg : '❌ ' + data.error;
+  res.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+}
+function editTq(q){
+  document.getElementById('tq-modal-title').textContent = '编辑监控表：' + q.name;
+  fillForm('form-tq', q);
+  document.getElementById('tq-name').readOnly = true;
+  openModal('modal-tq');
+}
+async function saveTq(){
+  const form = document.getElementById('form-tq');
+  const fd = new FormData(form);
+  const r = await fetch('/api/table-monitor/queries', {method:'POST', body: fd});
+  if(r.ok){ alert('监控表已保存'); closeModal('modal-tq'); location.reload(); }
+  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
+}
+document.getElementById('modal-tq').addEventListener('click', function(e){
+  if(e.target === this){ closeModal('modal-tq'); document.getElementById('tq-name').readOnly = false; }
+});
 
 // ── 通知 ────────────────────────────────────────────────────────────────────
 async function saveNotifier(type, formId){

@@ -80,6 +80,16 @@
 
 {% endif %}
 
+{% if table_monitor_enabled and s.table_size_results %}
+### 表规模监控
+
+| 描述 | 库.表 | 大小(GB) | 阈值(GB) | 行数 | 状态 | 错误 |
+|---|---|---|---|---|---|---|
+{% for r in s.table_size_results -%}
+| {{ r.description or "—" }} | `{{ r.database }}.{{ r.table }}` | {{ "%.3f"|format(r.size_gb) if r.size_gb is not none else "—" }} | {{ r.size_threshold_gb }} | {{ r.rows if r.rows is not none else "—" }} | {{ "⚠️ 超阈值" if r.is_anomaly else ("— 无数据" if r.size_gb is none else "✅ 正常") }} | {{ r.error or "" }} |
+{% endfor %}
+
+{% endif %}
 ### Elasticsearch 日志
 
 {% for r in s.es_results -%}
