@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}定时任务 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}定时任务{% endblock %}
+{% block page_subtitle %}配置自动巡检计划，替代手动 crontab{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+  <div class="alert alert-info" style="margin:0;flex:1;margin-right:1rem">
+    使用标准 5 字段 cron 表达式（本地时间）。例：<code>0 2 * * *</code> = 每天凌晨 2 点；
+    <code>0 */6 * * *</code> = 每 6 小时。需安装 <code>apscheduler</code> 依赖。
+  </div>
+  <button class="btn btn-primary" onclick="openModal('modal-job')">＋ 添加定时任务</button>
+</div>
+
+{% if jobs %}
+<div class="card" style="padding:0;overflow:hidden">
+  <table>
+    <thead><tr>
+      <th>名称</th><th>Cron 表达式</th><th>模式</th><th>报告格式</th><th>下次执行</th><th>状态</th><th>操作</th>
+    </tr></thead>
+    <tbody>
+    {% for j in jobs %}
+    <tr {% if not j.get('enabled', True) %}style="opacity:.55"{% endif %}>
+      <td><strong>{{ j.label }}</strong><br><span class="text-muted" style="font-size:.8rem">{{ j.id }}</span></td>
+      <td><code>{{ j.cron_expr }}</code></td>
+      <td>
+        {% if j.mode == 'range' %}
+        <span class="badge badge-active">时间段 {{ j.get('period_hours',24) }}h</span>
+        {% else %}
+        <span class="badge">快照</span>
+        {% endif %}
+      </td>
+      <td><code>{{ j.get('fmt','html') }}</code></td>
+      <td class="text-muted" style="font-size:.8125rem">{{ next_runs.get(j.id, '—') }}</td>
+      <td>
+        {% if j.get('enabled', True) %}
+        <span class="badge badge-active">启用</span>
+        {% else %}
+        <span class="badge">已停用</span>
+        {% endif %}
+      </td>
+      <td class="actions">
+        <button class="btn btn-outline btn-sm" onclick='editJob({{ j | tojson }})'>编辑</button>
+        <button class="btn btn-outline btn-sm" onclick="runNow('{{ j.id }}','{{ j.label }}')">立即执行</button>
+        <button class="btn btn-outline btn-sm" onclick="toggleJob('{{ j.id }}', {{ 'false' if j.get('enabled', True) else 'true' }})">
+          {{ '停用' if j.get('enabled', True) else '启用' }}
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="del('/api/cron/{{ j.id }}','删除任务「{{ j.label }}」？',true)">删除</button>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">
+  <div class="empty-icon">⏰</div>
+  <p>还没有定时任务。<br><span class="text-muted">点击「添加定时任务」配置自动巡检计划。</span></p>
+</div>
+{% endif %}
+
+<!-- Modal: 添加/编辑任务 -->
+<div class="modal-backdrop" id="modal-job" onclick="if(event.target===this)closeModal('modal-job')">
+  <div class="modal">
+    <div class="modal-title" id="job-modal-title">添加定时任务</div>
+    <form id="form-job">
+      <input type="hidden" name="id" id="job-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>任务名称 <span style="color:red">*</span></label>
+          <input name="label" required placeholder="如：每日凌晨巡检">
+        </div>
+        <div class="form-group">
+          <label>Cron 表达式 <span style="color:red">*</span></label>
+          <input name="cron_expr" required placeholder="0 2 * * *">
+          <div class="form-hint">5 字段：分 时 日 月 周（本地时间）</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>巡检模式</label>
+          <select name="mode" id="job-mode" onchange="togglePeriodField()">
+            <option value="instant">快照（即时）</option>
+            <option value="range">时间段审计</option>
+          </select>
+        </div>
+        <div class="form-group" id="job-period-field" style="display:none">
+          <label>回溯时长（小时）</label>
+          <input name="period_hours" type="number" value="24" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>报告格式</label>
+          <select name="fmt">
+            <option value="html">HTML</option>
+            <option value="md">Markdown</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:.4rem;margin-top:1.4rem">
+            <input type="checkbox" name="notify" value="true" id="job-notify" checked> 执行后发送通知
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:.4rem">
+          <input type="checkbox" name="enabled" value="true" id="job-enabled" checked> 立即启用
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-job')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="saveJob()">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePeriodField(){
+  const v = document.getElementById('job-mode').value;
+  document.getElementById('job-period-field').style.display = v === 'range' ? '' : 'none';
+}
+function editJob(j){
+  document.getElementById('job-modal-title').textContent = '编辑任务：' + j.label;
+  fillForm('form-job', j);
+  document.getElementById('job-id').value = j.id || '';
+  document.getElementById('job-mode').value = j.mode || 'instant';
+  togglePeriodField();
+  document.getElementById('job-notify').checked = j.notify !== false;
+  document.getElementById('job-enabled').checked = j.enabled !== false;
+  openModal('modal-job');
+}
+async function saveJob(){
+  const form = document.getElementById('form-job');
+  const fd = new FormData(form);
+  if(!fd.get('id')) fd.set('id', 'cron_' + Date.now());
+  fd.set('notify', document.getElementById('job-notify').checked ? 'true' : 'false');
+  fd.set('enabled', document.getElementById('job-enabled').checked ? 'true' : 'false');
+  const r = await fetch('/api/cron', {method:'POST', body: fd});
+  if(r.ok){ alert('任务已保存'); closeModal('modal-job'); location.reload(); }
+  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
+}
+async function runNow(id, label){
+  if(!confirm('立即触发任务「' + label + '」？巡检将在后台运行。')) return;
+  const r = await fetch('/api/cron/' + id + '/run-now', {method:'POST'});
+  const data = await r.json();
+  alert(data.ok ? data.msg + '\n\n巡检报告将生成到「巡检报告」页面。' : '触发失败: ' + data.error);
+}
+async function toggleJob(id, newEnabled){
+  const fd = new FormData(); fd.set('enabled', newEnabled);
+  const r = await fetch('/api/cron/' + id + '/toggle', {method:'POST', body: fd});
+  if(r.ok) location.reload();
+  else alert('操作失败');
+}
+</script>
+{% endblock %}

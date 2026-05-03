@@ -227,6 +227,45 @@ def save_notifier(notifier: dict) -> None:
     _save_raw(raw)
 
 
+# ── Cron Jobs ──────────────────────────────────────────────────────────────
+
+def list_cron_jobs() -> list[dict]:
+    return _load_raw().get("cron_jobs", [])
+
+
+def save_cron_job(job: dict) -> None:
+    raw = _load_raw()
+    jobs: list[dict] = raw.setdefault("cron_jobs", [])
+    for i, j in enumerate(jobs):
+        if j.get("id") == job.get("id"):
+            jobs[i] = job
+            _save_raw(raw)
+            return
+    jobs.append(job)
+    _save_raw(raw)
+
+
+def delete_cron_job(job_id: str) -> bool:
+    raw = _load_raw()
+    jobs = raw.get("cron_jobs", [])
+    before = len(jobs)
+    raw["cron_jobs"] = [j for j in jobs if j.get("id") != job_id]
+    if len(raw["cron_jobs"]) < before:
+        _save_raw(raw)
+        return True
+    return False
+
+
+def toggle_cron_job(job_id: str, enabled: bool) -> bool:
+    raw = _load_raw()
+    for j in raw.get("cron_jobs", []):
+        if j.get("id") == job_id:
+            j["enabled"] = enabled
+            _save_raw(raw)
+            return True
+    return False
+
+
 # ── Table Monitor ──────────────────────────────────────────────────────────
 
 def get_table_monitor() -> dict:

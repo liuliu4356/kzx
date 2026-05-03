@@ -97,6 +97,18 @@ class BatchWindow:
 
 
 @dataclass
+class CronJob:
+    id: str
+    label: str
+    cron_expr: str              # 标准 5 字段 cron（本地时间）
+    mode: str = "instant"       # "instant" | "range"
+    period_hours: int = 24      # range 模式回溯时长（小时）
+    fmt: str = "html"           # 报告格式："html" | "md"
+    notify: bool = True
+    enabled: bool = True
+
+
+@dataclass
 class TableQuery:
     name: str
     database: str

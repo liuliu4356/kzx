@@ -16,11 +16,34 @@ from jinja2 import Environment, FileSystemLoader
 from dotenv import load_dotenv
 import json
 
-app = FastAPI(title="三思GDB巡检平台")
-
 _WEB_DIR = Path(__file__).parent
 _PROJ_ROOT = _WEB_DIR.parent.parent
 _KB_DIR = _PROJ_ROOT / "knowledge_base"
+_CONFIG_PATH = str(_PROJ_ROOT / "config.yaml")
+
+_scheduler = None
+
+app = FastAPI(title="三思GDB巡检平台")
+
+
+@app.on_event("startup")
+async def _startup():
+    global _scheduler
+    try:
+        from ..scheduler import setup_scheduler
+        if Path(_CONFIG_PATH).exists():
+            _scheduler = setup_scheduler(_CONFIG_PATH)
+            if _scheduler:
+                _scheduler.start()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("定时任务启动失败: %s", exc)
+
+
+@app.on_event("shutdown")
+async def _shutdown():
+    if _scheduler and _scheduler.running:
+        _scheduler.shutdown(wait=False)
 
 app.mount("/static", StaticFiles(directory=str(_WEB_DIR / "static")), name="static")
 
@@ -549,6 +572,95 @@ async def api_test_es(
         return JSONResponse({"ok": True, "total": total})
     except Exception as exc:
         return JSONResponse({"ok": False, "error": str(exc)})
+
+
+# ── Cron page ─────────────────────────────────────────────────────────────
+
+@app.get("/cron", response_class=HTMLResponse)
+async def page_cron(request: Request):
+    jobs = cs.list_cron_jobs()
+    # 注入 next_run_time
+    next_runs: dict[str, str] = {}
+    if _scheduler:
+        for j in _scheduler.get_jobs():
+            nrt = j.next_run_time
+            next_runs[j.id] = nrt.strftime("%Y-%m-%d %H:%M") if nrt else "—"
+    return render_template("cron.html", {"jobs": jobs, "next_runs": next_runs, "active": "cron"})
+
+
+# ── API: Cron Jobs ─────────────────────────────────────────────────────────
+
+@app.get("/api/cron")
+async def api_list_cron():
+    jobs = cs.list_cron_jobs()
+    next_runs: dict[str, str] = {}
+    if _scheduler:
+        for j in _scheduler.get_jobs():
+            nrt = j.next_run_time
+            next_runs[j.id] = nrt.isoformat() if nrt else None
+    return JSONResponse({"jobs": jobs, "next_runs": next_runs})
+
+
+@app.post("/api/cron")
+async def api_save_cron(
+    id: str = Form(...),
+    label: str = Form(...),
+    cron_expr: str = Form(...),
+    mode: str = Form("instant"),
+    period_hours: int = Form(24),
+    fmt: str = Form("html"),
+    notify: str = Form("true"),
+    enabled: str = Form("true"),
+):
+    job = {
+        "id": id, "label": label, "cron_expr": cron_expr,
+        "mode": mode, "period_hours": period_hours, "fmt": fmt,
+        "notify": notify.lower() == "true",
+        "enabled": enabled.lower() == "true",
+    }
+    cs.save_cron_job(job)
+    if _scheduler:
+        from ..scheduler import reload_jobs
+        reload_jobs(_scheduler, _CONFIG_PATH)
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/cron/{job_id}")
+async def api_delete_cron(job_id: str):
+    ok = cs.delete_cron_job(job_id)
+    if not ok:
+        raise HTTPException(404, "任务不存在")
+    if _scheduler:
+        try:
+            _scheduler.remove_job(job_id)
+        except Exception:
+            pass
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/cron/{job_id}/run-now")
+async def api_cron_run_now(job_id: str):
+    jobs = cs.list_cron_jobs()
+    job = next((j for j in jobs if j.get("id") == job_id), None)
+    if not job:
+        raise HTTPException(404, "任务不存在")
+    import threading
+    from ..scheduler import _run_inspection
+    threading.Thread(
+        target=_run_inspection, args=[_CONFIG_PATH, job_id], daemon=True
+    ).start()
+    return JSONResponse({"ok": True, "msg": f"任务 {job.get('label', job_id)} 已触发"})
+
+
+@app.post("/api/cron/{job_id}/toggle")
+async def api_cron_toggle(job_id: str, enabled: str = Form(...)):
+    ok = cs.toggle_cron_job(job_id, enabled.lower() == "true")
+    if not ok:
+        raise HTTPException(404, "任务不存在")
+    if _scheduler:
+        from ..scheduler import reload_jobs
+        reload_jobs(_scheduler, _CONFIG_PATH)
+    return JSONResponse({"ok": True})
 
 
 # ── API: Table Monitor ────────────────────────────────────────────────────
