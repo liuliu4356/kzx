@@ -1,42 +1,58 @@
-# Python
-.venv/
-venv/
-__pycache__/
-*.pyc
-.pytest_cache/
-*.egg-info/
-.eggs/
-
-# 配置文件 (敏感)
+# 敏感配置文件
 .env
 config.yaml
 
+# 数据目录
+es-data/
+grafana-data/
+prometheus-data/
+mysql-data/
+postgres-data/
+redis-data/
+
+# 生成的报告
+reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg/
+dist/
+build/
+*.egg-info/
+.eggs/
+lib/
+lib64/
+parts/
+sdist-egg/
+var/
+wheels/
+*.egg-info/
+*.egg/
+.eggs/
+*.manifest
+suptools-*.egg-info/
+
 # IDE
-.idea/
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
 
-# 报告
-reports/*.md
-reports/*.html
-!reports/.gitkeep
-
-# 备份文件
-*.bak
-
-# Docker 数据 (不提交到 Git)
-es-data/
-prometheus-data/
-grafana-data/
-logstash-data/
-prometheus-data/
-
-# 系统文件
+# macOS
 .DS_Store
-Thumbs.db
-*.log
 
-# CLAUDE.md 和 DEVLOG.md (可选)
-CLAUDE.md
-DEVLOG.md
+# Windows
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+*.ckp
+
+# 临时文件
+*.tmp
+*.bak
+*~

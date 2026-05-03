@@ -1,4 +1,9 @@
+import sys
 import requests
+
+# Fix Windows encoding issue
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Test the inspect API
 resp = requests.post('http://localhost:8000/api/inspect', 

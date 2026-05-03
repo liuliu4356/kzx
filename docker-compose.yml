@@ -113,8 +113,9 @@ services:
     container_name: mysqld-exporter-1
     ports:
       - "9104:9100"
-    environment:
-      - DATA_SOURCE_NAME=root:mysql@tcp(mysql-1:3306)/
+    command: ["--config.my-cnf=/etc/my.cnf"]
+    volumes:
+      - ./mysqld-exporter.my.cnf:/etc/my.cnf:ro
     depends_on:
       - mysql-1
     restart: unless-stopped
@@ -134,7 +135,7 @@ services:
     image: oliver006/redis_exporter:v1.55.0
     container_name: redis-exporter-1
     ports:
-      - "9121:9121"
+      - "9123:9121"
     environment:
       - REDIS_ADDR=redis://redis-1:6379
     depends_on:
@@ -170,7 +171,7 @@ services:
     image: docker.elastic.co/kibana/kibana:8.13.0
     container_name: kibana
     ports:
-      - "5601:5601"
+      - "15601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
@@ -197,7 +198,7 @@ services:
     container_name: filebeat
     user: root
     volumes:
-      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml
       - /var/log:/var/log:ro
     depends_on:
       - logstash
