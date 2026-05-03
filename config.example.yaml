@@ -66,12 +66,139 @@ prometheus:
       threshold: 1
       unit: ''
       anomaly_when: lt        # 任意实例 down 即异常
+      component: system
+      severity: critical
 
     - name: emergency_alerts
       promql: 'sum(gdb_alert_count{severity="critical"}) or vector(0)'
       threshold: 0            # 紧急告警必须为 0
       unit: ''
       anomaly_when: gt
+      component: system
+      severity: critical
+
+    # ── GDB 组件存活（v1.5.0，需 GDB Prometheus exporter）──────────────
+    - name: gdb_omm_up
+      promql: 'min(gdb_omm_health_status) or vector(0)'
+      threshold: 1
+      anomaly_when: lt
+      unit: ''
+      component: omm
+      severity: critical
+      description: 'OMM 主控节点存活状态（1=正常）'
+      faq: "1. systemctl status gdb-omm\n2. 检查 /var/log/gdb/omm.log 最后50行\n3. 联系 GDB DBA"
+
+    - name: gdb_mds_up
+      promql: 'min(gdb_mds_health_status) or vector(0)'
+      threshold: 1
+      anomaly_when: lt
+      unit: ''
+      component: mds
+      severity: critical
+      description: 'MDS 元数据服务存活状态（1=正常）'
+      faq: "1. systemctl status gdb-mds\n2. 检查 MDS 端口（默认 9000）是否监听\n3. netstat -tlnp | grep 9000"
+
+    - name: gdb_cm_up
+      promql: 'min(gdb_cm_health_status) or vector(0)'
+      threshold: 1
+      anomaly_when: lt
+      unit: ''
+      component: cm
+      severity: critical
+      description: 'CM 集群管理服务存活状态（1=正常）'
+      faq: "1. systemctl status gdb-cm\n2. 检查心跳日志 /var/log/gdb/cm.log"
+
+    - name: gdb_pm_up
+      promql: 'min(gdb_pm_health_status) or vector(0)'
+      threshold: 1
+      anomaly_when: lt
+      unit: ''
+      component: pm
+      severity: critical
+      description: 'PM 分区管理服务存活状态（1=正常）'
+      faq: "1. systemctl status gdb-pm\n2. 检查分区日志 /var/log/gdb/pm.log"
+
+    - name: gdb_dbproxy_up
+      promql: 'min(gdb_dbproxy_health_status) or vector(0)'
+      threshold: 1
+      anomaly_when: lt
+      unit: ''
+      component: dbproxy
+      severity: critical
+      description: 'DBProxy 数据库代理存活状态（1=正常）'
+      faq: "1. systemctl status gdb-dbproxy\n2. netstat -tlnp | grep 3306\n3. 检查 /var/log/gdb/dbproxy.log"
+
+    # ── GTM 主备延迟 & 副本健康 ─────────────────────────────────────────
+    - name: gdb_gtm_replication_lag_sec
+      promql: 'max(gdb_gtm_standby_lag_seconds) or vector(0)'
+      threshold: 5
+      anomaly_when: gt
+      unit: 's'
+      component: gtm
+      severity: critical
+      description: 'GTM 主备延迟（秒），期望 <5s'
+      faq: "1. 检查 GTM standby 节点网络带宽\n2. 批处理窗口内延迟可放宽至 60s\n3. 查看 /var/log/gdb/gtm.log"
+
+    - name: gdb_pm_replica_factor
+      promql: 'min(gdb_pm_partition_replica_count) or vector(3)'
+      threshold: 3
+      anomaly_when: lt
+      unit: ''
+      component: pm
+      severity: warning
+      description: '各分区最小副本数（期望 ≥ 3）'
+      faq: "副本数不足说明有 RDB 节点不可用，需排查对应 RDB 日志并联系 DBA"
+
+    - name: gdb_rdb_sync_lag_sec
+      promql: 'max(gdb_rdb_replication_lag_seconds) or vector(0)'
+      threshold: 10
+      anomaly_when: gt
+      unit: 's'
+      component: rdb
+      severity: warning
+      description: 'RDB 节点间同步延迟（秒），期望 <10s'
+      faq: "1. 检查 RDB 节点间网络带宽\n2. 查看 /var/log/gdb/rdb.log 的 SYNC 相关日志"
+
+    # ── DBProxy 性能 & 备份进程 ──────────────────────────────────────────
+    - name: gdb_dbproxy_conn_pool_usage
+      promql: 'max(gdb_dbproxy_active_connections / gdb_dbproxy_max_connections) or vector(0)'
+      threshold: 0.8
+      anomaly_when: gt
+      unit: 'ratio'
+      component: dbproxy
+      severity: warning
+      description: 'DBProxy 连接池使用率，期望 <80%'
+      faq: "1. 查看 DBProxy 连接来源分布\n2. 检查是否有连接泄漏（长时间 sleep 连接）\n3. 考虑调大 max_connections"
+
+    - name: gdb_dbproxy_slow_query_rate
+      promql: 'sum(rate(gdb_dbproxy_slow_queries_total[5m])) or vector(0)'
+      threshold: 10
+      anomaly_when: gt
+      unit: 'q/s'
+      component: dbproxy
+      severity: warning
+      description: 'DBProxy 慢查询速率（近5min），期望 <10 q/s'
+      faq: "1. 查看 DBProxy 慢日志定位 Top-N 慢 SQL\n2. 联系 DBA 分析执行计划\n3. 批处理期间可适当放宽"
+
+    - name: gdb_dbproxy_error_rate
+      promql: 'sum(rate(gdb_dbproxy_errors_total[5m])) or vector(0)'
+      threshold: 1
+      anomaly_when: gt
+      unit: 'err/s'
+      component: dbproxy
+      severity: warning
+      description: 'DBProxy 每秒错误数，期望 <1 err/s'
+      faq: "1. 检查 DBProxy 错误日志\n2. 确认后端 RDB 节点状态\n3. 查看客户端错误类型分布"
+
+    - name: gdb_backup_process_running
+      promql: 'up{job="arm_backup_mysql"} or vector(0)'
+      threshold: 1
+      anomaly_when: lt
+      unit: ''
+      component: backup
+      severity: warning
+      description: 'arm_backup_mysql 备份进程存活（1=运行中）'
+      faq: "1. ps aux | grep arm_backup_mysql\n2. 检查备份任务 cron 配置\n3. 查看备份日志 /var/log/gdb/backup/\n4. 确认备份窗口是否已过"
 
 elasticsearch:
   url: http://localhost:9200

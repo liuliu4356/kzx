@@ -578,12 +578,44 @@ ES  表无勾选 → 导出全部 elasticsearch.queries
 
 ---
 
+## Demo-11 · GDB 组件专项监控（v1.5.0 Phase 1）
+
+**日期**：2026-05-03
+**状态**：✅ 完成
+
+### 背景
+
+GoldenDB 生产环境的 Prometheus exporter 已暴露 OMM/MDS/CM/PM/GTM/DBProxy/RDB/Backup 8 大组件的专项指标，但原有 `config.example.yaml` 未覆盖。本 Demo 以**零代码改动**方式补全这部分监控覆盖。
+
+### 完成内容
+
+| 文件 | 变更 | 说明 |
+|---|---|---|
+| `config.example.yaml` | 追加 12 条 PromQL + 增强 2 条 | 覆盖 GDB 8 大组件；新增 `component` / `severity` / `description` / `faq` 字段 |
+| `CHANGELOG.md` | 新增 v1.5.0 条目 | - |
+
+### 新增指标分组
+
+**A — 组件存活**（severity: critical）：`gdb_omm_up` / `gdb_mds_up` / `gdb_cm_up` / `gdb_pm_up` / `gdb_dbproxy_up`
+
+**B — 复制延迟 & 副本健康**（severity: critical/warning）：`gdb_gtm_replication_lag_sec` / `gdb_pm_replica_factor` / `gdb_rdb_sync_lag_sec`
+
+**C — DBProxy 性能 & 备份**（severity: warning）：`gdb_dbproxy_conn_pool_usage` / `gdb_dbproxy_slow_query_rate` / `gdb_dbproxy_error_rate` / `gdb_backup_process_running`
+
+### 关键设计决策
+
+- 存活类指标使用 `anomaly_when: lt`，防止 exporter 无数据时误报，PromQL 使用 `min(...) or vector(0)` 兜底
+- 连接池使用率用比值（`max(...active/.../max_connections)`），比绝对数更稳定
+- 所有指标预置 `component` / `severity` 字段，为 Phase 2（报告分组）做数据准备，Phase 1 升级配置不改代码
+
+---
+
 ## 待开发（下一步）
 
 | 优先级 | 内容 |
 |---|---|
-| P2 | 表规模监控：表记录数 / 表大小 PromQL |
-| P2 | 数据字典状态检查：禁用/禁写表为 0 |
+| P1 | **v1.5.0 Phase 2**：PromQuery 加 component/severity 字段 + 报告按组件分组 |
+| P1 | **v1.5.0 Phase 3**：表规模监控（pymysql 采集器 + Web UI 配置） |
+| P1 | **v1.5.0 Phase 4**：APScheduler 定时巡检 + Web UI 任务管理页 |
 | P3 | 历史趋势对比：与上次报告 diff，标出新增/已恢复异常 |
 | P3 | 知识库检索集成：巡检分析时自动向量检索知识库（当前仅存储，未接入检索） |
-| P3 | 定时任务配置：Web UI 配置 cron 巡检计划 |

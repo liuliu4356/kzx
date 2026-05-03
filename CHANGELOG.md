@@ -4,6 +4,38 @@
 
 ---
 
+## v1.5.0 (2026-05-03) - GDB 组件专项监控
+
+### 新增监控指标（config.example.yaml）
+
+**GDB 组件存活监控（OMM / MDS / CM / PM / DBProxy）**
+- ✅ `gdb_omm_up` — OMM 主控节点存活状态，含 FAQ 排查指引
+- ✅ `gdb_mds_up` — MDS 元数据服务存活状态
+- ✅ `gdb_cm_up` — CM 集群管理服务存活状态
+- ✅ `gdb_pm_up` — PM 分区管理服务存活状态
+- ✅ `gdb_dbproxy_up` — DBProxy 数据库代理存活状态
+
+**GTM 主备延迟 & 副本健康**
+- ✅ `gdb_gtm_replication_lag_sec` — GTM 主备延迟（期望 <5s）
+- ✅ `gdb_pm_replica_factor` — 各分区最小副本数（期望 ≥ 3）
+- ✅ `gdb_rdb_sync_lag_sec` — RDB 节点间同步延迟（期望 <10s）
+
+**DBProxy 性能 & 备份进程**
+- ✅ `gdb_dbproxy_conn_pool_usage` — 连接池使用率（期望 <80%）
+- ✅ `gdb_dbproxy_slow_query_rate` — 慢查询速率（期望 <10 q/s）
+- ✅ `gdb_dbproxy_error_rate` — 每秒错误数（期望 <1 err/s）
+- ✅ `gdb_backup_process_running` — arm_backup_mysql 备份进程存活
+
+**已有指标增强**
+- ✅ `instance_up` / `emergency_alerts` 补充 `component: system` 和 `severity: critical` 字段
+- ✅ 所有新指标带 `component` / `severity` / `description` / `faq` 字段，为 Phase 2 报告分组做准备
+
+### 配置说明
+- 新指标均依赖 GDB Prometheus exporter（v1.5.0+），字段格式详见 `config.example.yaml`
+- `anomaly_when: lt` 用于存活类指标（值低于阈值才告警）
+
+---
+
 ## v1.4.0 (2026-05-02) - 深色主题改造 + 项目更名
 
 ### 项目更名
