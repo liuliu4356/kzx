@@ -56,3 +56,6 @@ desktop.ini
 *.tmp
 *.bak
 *~
+run_debug.py
+test_*.py
+*_bak

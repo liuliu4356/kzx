@@ -7,7 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from .helpers import render_template, _list_reports, _list_kb_files, _get_current_user, _PROJ_ROOT
+from .helpers import render_template, _list_reports, _list_kb_files, _get_current_user, _PROJ_ROOT, _KB_DIR
 from . import config_store as cs
 from . import auth as _auth
 
@@ -20,7 +20,7 @@ router = APIRouter()
 async def page_index(request: Request):
     raw = cs.get_all()
     reports = _list_reports()[:10]
-    kb_count = len(_list_kb_files()) if cs._KB_DIR.exists() else 0
+    kb_count = len(_list_kb_files()) if _KB_DIR.exists() else 0
     raw["_kb_count"] = kb_count
     return render_template("index.html", {"raw": raw, "reports": reports, "active": "home"}, request)
 
@@ -72,6 +72,29 @@ async def page_reports_settings(request: Request):
     return render_template("reports_settings.html", {"raw": raw, "active": "reports", "subtab": "settings"}, request)
 
 
+@router.get("/console", response_class=HTMLResponse)
+async def page_console(request: Request):
+    """巡检控制台页面（与首页相同）"""
+    raw = cs.get_all()
+    reports = _list_reports()[:10]
+    kb_count = len(_list_kb_files()) if _KB_DIR.exists() else 0
+    raw["_kb_count"] = kb_count
+    return render_template("index.html", {"raw": raw, "reports": reports, "active": "home"}, request)
+
+
+@router.get("/cron", response_class=HTMLResponse)
+async def page_cron(request: Request):
+    """定时任务页面"""
+    from .app import _scheduler
+    jobs = cs.list_cron_jobs()
+    next_runs: dict[str, str] = {}
+    if _scheduler:
+        for j in _scheduler.get_jobs():
+            nrt = j.next_run_time
+            next_runs[j.id] = nrt.isoformat() if nrt else None
+    return render_template("cron.html", {"jobs": jobs, "next_runs": next_runs, "active": "cron"}, request)
+
+
 # ── 项目总览路由 ───────────────────────────────────────────────
 
 _OVERVIEW_PAGES = {
@@ -92,6 +115,7 @@ _OVERVIEW_PAGES = {
         "files": [_PROJ_ROOT / "docs" / "00-文档索引" / "README.md"],
         "extra_links": [
             {"url": "/overview/deploy", "label": "项目部署文档", "desc": "生产/测试环境部署", "external": False},
+            {"url": "/overview/kylin-deploy", "label": "麒麟系统部署指南", "desc": "国产麒麟系统服务部署", "external": False},
             {"url": "/overview/guide", "label": "小白操作手册", "desc": "零基础快速入门", "external": False},
             {"url": "/overview/bugs", "label": "Bug修复记录", "desc": "版本更新日志", "external": False},
         ],
@@ -130,6 +154,10 @@ _OVERVIEW_PAGES = {
     "bugs": {
         "title": "Bug修复并记录",
         "files": [_PROJ_ROOT / "CHANGELOG.md", _PROJ_ROOT / "DEVLOG.md"],
+    },
+    "kylin-deploy": {
+        "title": "麒麟系统服务部署指南",
+        "files": [_PROJ_ROOT / "docs" / "麒麟系统部署指南.md"],
     },
 }
 
