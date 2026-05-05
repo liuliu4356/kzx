@@ -9,7 +9,7 @@
     使用标准 5 字段 cron 表达式（本地时间）。例：<code>0 2 * * *</code> = 每天凌晨 2 点；
     <code>0 */6 * * *</code> = 每 6 小时。需安装 <code>apscheduler</code> 依赖。
   </div>
-  <button class="btn btn-primary" onclick="openModal('modal-job')">＋ 添加定时任务</button>
+  {% if is_admin %}<button class="btn btn-primary" onclick="openModal('modal-job')">＋ 添加定时任务</button>{% endif %}
 </div>
 
 {% if jobs %}
@@ -31,7 +31,10 @@
         {% endif %}
       </td>
       <td><code>{{ j.get('fmt','html') }}</code></td>
-      <td class="text-muted" style="font-size:.8125rem">{{ next_runs.get(j.id, '—') }}</td>
+      <td class="text-muted" style="font-size:.8125rem">
+        {{ next_runs.get(j.id, '—') }}<br>
+        <a href="#" onclick="showHistory('{{ j.id }}','{{ j.label }}');return false" style="font-size:.75rem;color:var(--teal)">查看历史</a>
+      </td>
       <td>
         {% if j.get('enabled', True) %}
         <span class="badge badge-active">启用</span>
@@ -40,12 +43,16 @@
         {% endif %}
       </td>
       <td class="actions">
+        {% if is_admin %}
         <button class="btn btn-outline btn-sm" onclick='editJob({{ j | tojson }})'>编辑</button>
         <button class="btn btn-outline btn-sm" onclick="runNow('{{ j.id }}','{{ j.label }}')">立即执行</button>
         <button class="btn btn-outline btn-sm" onclick="toggleJob('{{ j.id }}', {{ 'false' if j.get('enabled', True) else 'true' }})">
           {{ '停用' if j.get('enabled', True) else '启用' }}
         </button>
         <button class="btn btn-danger btn-sm" onclick="del('/api/cron/{{ j.id }}','删除任务「{{ j.label }}」？',true)">删除</button>
+        {% else %}
+        <span class="text-muted" style="font-size:.82rem">只读</span>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}
@@ -116,6 +123,19 @@
   </div>
 </div>
 
+<!-- 执行历史 Modal -->
+<div class="modal-backdrop" id="modal-history" onclick="if(event.target===this)closeModal('modal-history')">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-title">执行历史 — <span id="history-job-label"></span></div>
+    <div id="history-content" style="max-height:360px;overflow-y:auto">
+      <div style="text-align:center;padding:2rem;color:var(--text-muted)">加载中…</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeModal('modal-history')">关闭</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -155,6 +175,26 @@ async function toggleJob(id, newEnabled){
   const r = await fetch('/api/cron/' + id + '/toggle', {method:'POST', body: fd});
   if(r.ok) location.reload();
   else alert('操作失败');
+}
+async function showHistory(jobId, label){
+  document.getElementById('history-job-label').textContent = label;
+  document.getElementById('history-content').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted)">加载中…</div>';
+  openModal('modal-history');
+  const r = await fetch('/api/cron/' + jobId + '/history');
+  const data = await r.json();
+  const list = data.history || [];
+  if(!list.length){
+    document.getElementById('history-content').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text-muted)">暂无执行记录</div>';
+    return;
+  }
+  const rows = list.map(h => {
+    const icon = h.status === 'ok' ? '✅' : '❌';
+    const detail = h.status === 'ok'
+      ? `<a href="/reports/view/${h.report}" target="_blank" style="color:var(--teal)">${h.report}</a>（${h.anomalies} 项异常）`
+      : `<span style="color:var(--red)">${h.error || ''}</span>`;
+    return `<tr><td>${icon}</td><td class="text-muted" style="font-size:.8rem">${h.started_at.slice(0,19).replace('T',' ')}</td><td>${detail}</td></tr>`;
+  }).join('');
+  document.getElementById('history-content').innerHTML = `<table><thead><tr><th>状态</th><th>执行时间</th><th>结果</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 </script>
 {% endblock %}

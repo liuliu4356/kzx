@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 def _run_inspection(cfg_path: str, job_id: str) -> None:
     """巡检任务执行体，由 APScheduler 调用。"""
+    from .web import config_store as cs
+    started_at = datetime.now(timezone.utc).isoformat()
     try:
         from .config import load_config, current_batch_window
         from .collectors import collect_sites
@@ -20,7 +22,6 @@ def _run_inspection(cfg_path: str, job_id: str) -> None:
         load_dotenv()
         cfg = load_config(cfg_path)
 
-        # 从 config.yaml 找到对应 job 配置
         raw = yaml.safe_load(Path(cfg_path).read_text(encoding="utf-8")) or {}
         job_cfg = next(
             (j for j in raw.get("cron_jobs", []) if j.get("id") == job_id), {}
@@ -53,12 +54,24 @@ def _run_inspection(cfg_path: str, job_id: str) -> None:
         )
         logger.info("[cron:%s] 报告已生成: %s，异常 %d 项", label, out_path.name, anomaly_total)
 
+        cs.add_cron_history(job_id, {
+            "started_at": started_at,
+            "status": "ok",
+            "report": out_path.name,
+            "anomalies": anomaly_total,
+        })
+
         if notify and cfg.notifiers:
             from .notifiers import notify_all
             notify_all(site_results, cfg, out_path)
 
     except Exception as exc:
         logger.exception("[cron:%s] 巡检失败: %s", job_id, exc)
+        cs.add_cron_history(job_id, {
+            "started_at": started_at,
+            "status": "fail",
+            "error": str(exc),
+        })
 
 
 def setup_scheduler(cfg_path: str):

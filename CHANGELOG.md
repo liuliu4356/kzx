@@ -4,6 +4,31 @@
 
 ---
 
+## v1.8.0 (2026-05-05) - Bug 修复 / 权限完善 / 功能增强
+
+### Bug 修复
+
+- **`app.py` 启动事件装饰器拼写错误**：`@a__` 修正为 `@app`，定时调度器现在可正常随 Web 启动
+- **`app.py` / `helpers.py` 路径错误**：`_PROJ_ROOT` 修正为 `src/web/` 向上两级（项目根目录），配置文件路径不再错误地指向 `src/config.yaml`
+- **`routes.py` / `auth_routes.py` 缺少 `APIRouter` 定义**：补充 `router = APIRouter()` 及相关 import，修复模块导入失败问题
+- **`users.json` CWD 依赖**：路径改为基于 `__file__` 的绝对路径，无论从哪个目录启动服务均可正确找到用户数据文件
+- **`_list_reports` 函数签名**：`report_dir` 参数改为可选，默认从 `config.yaml` 读取输出目录；修复 `/reports` 页面和 `/api/reports` 调用时的 TypeError
+
+### 新增功能
+
+- **Viewer 角色 UI 限制**：非管理员角色隐藏所有写操作按钮（添加/编辑/删除/保存），仅保留查看、下载、导出等只读操作
+- **修改密码**：用户管理页每行新增"改密"按钮，管理员可修改任意用户密码；用户可修改自己的密码
+- **LLM 连通性测试**：AI 分析 Tab 中每个大模型新增"测试连接"按钮，验证 API Key 和网络可达性
+- **定时任务执行历史**：每次定时任务执行后记录到 `cron_history.json`（最近20条），定时任务页点击"查看历史"可查看执行时间、状态和报告链接
+- **`config.example.yaml` 补全**：新增 auth（认证）和 logging（日志）配置节注释说明
+
+### 清理
+
+- 删除 `src/web/templates/settings.html.bak` 残留备份文件
+- 移除 `app.py` 末尾无效的 `sys.modules` 赋值语句
+
+---
+
 ## v1.7.0 (2026-05-03) - 多用户认证 / 机房管理优化 / 进度显示 / 安装脚本 / 调试日志
 
 ### 新增功能

@@ -1,12 +1,15 @@
 """读写 config.yaml 的辅助层，供 Web 路由使用。"""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 CONFIG_PATH = Path("config.yaml")
+_HISTORY_FILE = Path(__file__).parents[2] / "cron_history.json"
+_HISTORY_MAX = 20
 
 
 def _load_raw() -> dict:
@@ -301,6 +304,32 @@ def delete_table_query(name: str) -> bool:
         _save_raw(raw)
         return True
     return False
+
+
+# ── Cron History ──────────────────────────────────────────────────────────────
+
+def get_cron_history(job_id: str) -> list[dict]:
+    if not _HISTORY_FILE.exists():
+        return []
+    try:
+        data = json.loads(_HISTORY_FILE.read_text(encoding="utf-8"))
+        return data.get(job_id, [])
+    except Exception:
+        return []
+
+
+def add_cron_history(job_id: str, entry: dict) -> None:
+    if _HISTORY_FILE.exists():
+        try:
+            data = json.loads(_HISTORY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+    else:
+        data = {}
+    history = data.setdefault(job_id, [])
+    history.insert(0, entry)
+    data[job_id] = history[:_HISTORY_MAX]
+    _HISTORY_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def save_prometheus_url(url: str, timeout_sec: int) -> None:

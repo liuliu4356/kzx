@@ -26,10 +26,12 @@
     <span style="font-weight:600;font-size:.9375rem">已配置数据源（{{ datasources|length }} 个）</span>
     <div style="display:flex;gap:.5rem">
       <button class="btn btn-outline btn-sm" onclick="exportDatasources()">⬇ 导出</button>
+      {% if is_admin %}
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('ds-import-file').click()">⬆ 导入</button>
       <input type="file" id="ds-import-file" accept=".json" style="display:none" onchange="importDatasources(this)">
       <button class="btn btn-outline btn-sm" onclick="downloadDsTemplate()">📄 模板</button>
       <button class="btn btn-primary btn-sm" onclick="openModal('modal-ds')">＋ 添加数据源</button>
+      {% endif %}
     </div>
   </div>
 
@@ -53,8 +55,10 @@
         <td><code class="truncate">{{ ds.url }}</code></td>
         <td class="text-muted">{{ ds.get('timeout_sec', 10) }}s</td>
         <td class="actions">
+          {% if is_admin %}
           <button class="btn btn-outline btn-sm" onclick='editDs({{ ds | tojson }})'>编辑</button>
           <button class="btn btn-danger btn-sm" onclick="del('/api/datasources/{{ ds.id }}','删除数据源「{{ ds.name }}」？',true)">删除</button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -75,7 +79,7 @@
   <!-- 大模型配置 -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
     <span style="font-weight:600;font-size:.9375rem">大模型配置（{{ llm_models|length }} 个）</span>
-    <button class="btn btn-primary btn-sm" onclick="openModal('modal-llm')">＋ 添加大模型</button>
+    {% if is_admin %}<button class="btn btn-primary btn-sm" onclick="openModal('modal-llm')">＋ 添加大模型</button>{% endif %}
   </div>
 
   {% if llm_models %}
@@ -94,13 +98,16 @@
         <td>
           {% if m.id == active_llm %}
           <span class="badge badge-active">当前使用</span>
-          {% else %}
+          {% elif is_admin %}
           <button class="btn btn-outline btn-sm" onclick="setActiveLlm('{{ m.id }}')">设为默认</button>
           {% endif %}
         </td>
         <td class="actions">
+          {% if is_admin %}
           <button class="btn btn-outline btn-sm" onclick='editLlm({{ m | tojson }})'>编辑</button>
+          <button class="btn btn-outline btn-sm" onclick="testLlm('{{ m.id }}','{{ m.name }}')">测试连接</button>
           <button class="btn btn-danger btn-sm" onclick="del('/api/llm/models/{{ m.id }}','删除模型「{{ m.name }}」？',true)">删除</button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -118,8 +125,10 @@
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
     <span style="font-weight:600;font-size:.9375rem">知识库文档</span>
     <div style="display:flex;gap:.5rem">
+      {% if is_admin %}
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('kb-upload-input').click()">⬆ 上传文档</button>
       <input type="file" id="kb-upload-input" accept=".xlsx,.xls,.pdf,.md" multiple style="display:none" onchange="uploadKb(this)">
+      {% endif %}
     </div>
   </div>
   <div class="alert alert-info" style="margin-bottom:.75rem">
@@ -142,9 +151,11 @@
       </div>
       <div class="kb-actions">
         <a class="btn btn-outline btn-sm" href="/api/knowledge-base/download/{{ f.name }}">下载</a>
+        {% if is_admin %}
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('kb-update-{{ loop.index }}').click()">更新</button>
         <input type="file" id="kb-update-{{ loop.index }}" accept=".xlsx,.xls,.pdf,.md" style="display:none" onchange="updateKb(this,'{{ f.name }}')">
         <button class="btn btn-danger btn-sm" onclick="del('/api/knowledge-base/{{ f.name }}','确定删除知识库文档「{{ f.name }}」？',true)">删除</button>
+        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -212,7 +223,7 @@
             <input type="checkbox" name="smtp_ssl" {% if email.get('smtp_ssl', True) %}checked{% endif %}> 启用 SSL/TLS
           </label>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('email','form-email')">保存</button>
+        {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('email','form-email')">保存</button>{% endif %}
       </form>
     </div>
   </div>
@@ -236,7 +247,7 @@
           <label>@成员（userid，逗号分隔，留空则@所有人）</label>
           <input name="mentioned_list" value="{{ wechat.get('mentioned_list',[])|join(',') }}" placeholder="zhangsan,lisi">
         </div>
-        <button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('wechat_work','form-wechat')">保存</button>
+        {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('wechat_work','form-wechat')">保存</button>{% endif %}
       </form>
     </div>
   </div>
@@ -260,7 +271,7 @@
           <label>签名密钥（可选）</label>
           <input name="secret_env" value="{{ feishu.get('secret_env','') }}" placeholder="FEISHU_SECRET（环境变量名）">
         </div>
-        <button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('feishu','form-feishu')">保存</button>
+        {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('feishu','form-feishu')">保存</button>{% endif %}
       </form>
     </div>
   </div>
@@ -309,7 +320,7 @@
           <input name="timeout_sec" type="number" value="{{ tm.get('timeout_sec', 10) }}" style="width:100px">
         </div>
         <div style="display:flex;gap:.5rem">
-          <button type="button" class="btn btn-primary btn-sm" onclick="saveTmSettings()">保存连接配置</button>
+          {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveTmSettings()">保存连接配置</button>{% endif %}
           <button type="button" class="btn btn-outline btn-sm" onclick="testTmConn()">测试连接</button>
         </div>
         <div id="tm-test-result" style="margin-top:.5rem;font-size:.875rem"></div>
@@ -320,7 +331,7 @@
   <!-- 监控表列表 -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
     <span style="font-weight:600;font-size:.9375rem">监控表（{{ tm_queries|length }} 个）</span>
-    <button class="btn btn-primary btn-sm" onclick="openModal('modal-tq')">＋ 添加监控表</button>
+    {% if is_admin %}<button class="btn btn-primary btn-sm" onclick="openModal('modal-tq')">＋ 添加监控表</button>{% endif %}
   </div>
 
   {% if tm_queries %}
@@ -337,8 +348,10 @@
         <td>{{ q.get('size_threshold_gb', 100) }} GB</td>
         <td>{{ q.get('row_threshold', 0) or '—' }}</td>
         <td class="actions">
+          {% if is_admin %}
           <button class="btn btn-outline btn-sm" onclick='editTq({{ q | tojson }})'>编辑</button>
           <button class="btn btn-danger btn-sm" onclick="del('/api/table-monitor/queries/{{ q.name }}','删除监控表「{{ q.name }}」？',true)">删除</button>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
@@ -561,6 +574,20 @@ function _downloadJSON(obj, filename){
 }
 
 // ── 大模型 ──────────────────────────────────────────────────────────────────
+async function testLlm(id, name){
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '测试中…';
+  try {
+    const fd = new FormData(); fd.set('model_id', id);
+    const r = await fetch('/api/test/llm', {method:'POST', body: fd});
+    const data = await r.json();
+    alert(data.ok ? `✅ ${name} 连接成功\n${data.msg}` : `❌ ${name} 连接失败\n${data.error}`);
+  } catch(e) {
+    alert('❌ 网络错误: ' + e);
+  } finally {
+    btn.disabled = false; btn.textContent = '测试连接';
+  }
+}
 function editLlm(m){
   document.getElementById('llm-modal-title').textContent = '编辑模型：' + m.name;
   fillForm('form-llm', m);

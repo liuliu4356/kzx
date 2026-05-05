@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-_USERS_FILE = Path("users.json")
+_USERS_FILE = Path(__file__).parents[2] / "users.json"
 _SESSION_TTL_HOURS = 24 * 7  # 7 天
 _COOKIE_NAME = "sanssi_sid"
 
@@ -85,6 +85,18 @@ def delete_user(username: str) -> bool:
 def list_users() -> list[dict]:
     return [{"username": u["username"], "role": u["role"]}
             for u in _load().get("users", [])]
+
+
+def change_password(username: str, new_password: str) -> bool:
+    data = _load()
+    for u in data["users"]:
+        if u["username"] == username:
+            salt = secrets.token_hex(16)
+            u["salt"] = salt
+            u["hash"] = _hash_password(new_password, salt)
+            _save(data)
+            return True
+    return False
 
 
 # ── Session ───────────────────────────────────────────────────────────────

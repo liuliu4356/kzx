@@ -17,7 +17,7 @@
       <td class="actions">
         <a class="btn btn-outline btn-sm" href="/reports/view/{{ r.name }}" target="_blank">查看</a>
         <a class="btn btn-outline btn-sm" href="/reports/download/{{ r.name }}">下载</a>
-        <button class="btn btn-danger btn-sm" onclick="del('/api/reports/{{ r.name }}','确定删除报告「{{ r.name }}」？',true)">删除</button>
+        {% if is_admin %}<button class="btn btn-danger btn-sm" onclick="del('/api/reports/{{ r.name }}','确定删除报告「{{ r.name }}」？',true)">删除</button>{% endif %}
       </td>
     </tr>
     {% endfor %}

@@ -4,7 +4,7 @@
 {% block page_subtitle %}管理多机房数据采集配置，每个机房对应一套独立 Prometheus 实例{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-  <button class="btn btn-primary" onclick="openModal('modal-add')">＋ 添加机房</button>
+  {% if is_admin %}<button class="btn btn-primary" onclick="openModal('modal-add')">＋ 添加机房</button>{% endif %}
 </div>
 
 
@@ -19,9 +19,13 @@
       <td><code class="truncate">{{ s.prometheus_url }}</code></td>
       <td class="text-muted">{{ s.es_url or '（使用全局）' }}</td>
       <td class="actions">
+        {% if is_admin %}
         <button class="btn btn-outline btn-sm" onclick="editSite({{ s | tojson }})">编辑</button>
         <button class="btn btn-outline btn-sm" onclick="copySite({{ s | tojson }})">复制</button>
         <button class="btn btn-danger btn-sm" onclick="del('/api/sites/' + encodeURIComponent('{{ s.label }}'),'确定删除机房「{{ s.label }}」？',true)">删除</button>
+        {% else %}
+        <span class="text-muted" style="font-size:.82rem">只读</span>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

@@ -24,6 +24,7 @@
         {% endif %}
       </td>
       <td class="actions">
+        <button class="btn btn-outline btn-sm" onclick="openChangePwd('{{ u.username }}')">改密</button>
         {% if u.username != current_user %}
         <button class="btn btn-danger btn-sm" onclick="del('/api/users/{{ u.username }}','确认删除用户「{{ u.username }}」？',true)">删除</button>
         {% else %}
@@ -42,4 +43,45 @@
 </div>
 {% endif %}
 
+<!-- 修改密码 Modal -->
+<div class="modal-backdrop" id="modal-pwd" onclick="if(event.target===this)closeModal('modal-pwd')">
+  <div class="modal">
+    <div class="modal-title">修改密码 — <span id="pwd-username"></span></div>
+    <form id="form-pwd">
+      <input type="hidden" id="pwd-target-user">
+      <div class="form-group">
+        <label>新密码 <span style="color:red">*</span></label>
+        <input type="password" name="new_password" id="pwd-new" required minlength="6" placeholder="至少6位">
+      </div>
+      <div class="form-group">
+        <label>确认新密码 <span style="color:red">*</span></label>
+        <input type="password" name="new_password2" id="pwd-new2" required minlength="6">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="closeModal('modal-pwd')">取消</button>
+        <button type="button" class="btn btn-primary" onclick="submitChangePwd()">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openChangePwd(username){
+  document.getElementById('pwd-username').textContent = username;
+  document.getElementById('pwd-target-user').value = username;
+  document.getElementById('pwd-new').value = '';
+  document.getElementById('pwd-new2').value = '';
+  openModal('modal-pwd');
+}
+async function submitChangePwd(){
+  const username = document.getElementById('pwd-target-user').value;
+  const fd = new FormData(document.getElementById('form-pwd'));
+  const r = await fetch('/api/users/' + encodeURIComponent(username) + '/password', {method:'POST', body: fd});
+  if(r.ok){ alert('密码已修改'); closeModal('modal-pwd'); }
+  else { const e = await r.json().catch(()=>({})); alert('失败: ' + (e.detail || r.status)); }
+}
+</script>
 {% endblock %}
