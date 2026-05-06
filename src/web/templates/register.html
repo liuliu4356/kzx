@@ -43,8 +43,10 @@
       <div class="form-group">
         <label>角色</label>
         <select name="role">
-          <option value="viewer">viewer（只读）</option>
-          <option value="admin">admin（管理员）</option>
+          <option value="viewer">viewer（只读用户）- 只能查看报告和配置</option>
+          <option value="user">user（普通用户）- 可执行巡检和查看报告</option>
+          <option value="operator">operator（操作员）- 可执行巡检、修改配置</option>
+          <option value="admin">admin（管理员）- 拥有所有权限</option>
         </select>
       </div>
       {% else %}

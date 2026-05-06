@@ -3,6 +3,7 @@ from __future__ import annotations
 import queue
 import threading
 import shutil
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -26,8 +27,6 @@ _KB_DIR = _PROJ_ROOT / "knowledge_base"
 _REPORTS_DIR = _PROJ_ROOT / "reports"
 _CONFIG_PATH = str(_PROJ_ROOT / "config.yaml")
 
-_scheduler = None
-
 # ── 认证中间件 ─────────────────────────────────────────────────────
 
 _AUTH_WHITELIST = {"/login", "/register", "/logout"}
@@ -47,16 +46,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
         request.state.current_user = user
         return await call_next(request)
 
-# ── FastAPI 主应用 ─────────────────────────────────────────────
+# ── 生命周期管理 ───────────────────────────────────────────────
 
-app = FastAPI(title="三思GDB巡检平台")
-app.add_middleware(AuthMiddleware)
-
-# ── 启动和关闭事件 ─────────────────────────────────────────────
-
-@app.on_event("startup")
-async def _startup():
-    global _scheduler
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    _scheduler = None
     try:
         from ..scheduler import setup_scheduler
         if Path(_CONFIG_PATH).exists():
@@ -66,12 +60,14 @@ async def _startup():
     except Exception as exc:
         import logging
         logging.getLogger(__name__).warning("定时任务启动失败: %s", exc)
-
-@app.on_event("shutdown")
-async def _shutdown():
-    global _scheduler
+    yield
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=False)
+
+# ── FastAPI 主应用 ─────────────────────────────────────────────
+
+app = FastAPI(title="三思GDB巡检平台", lifespan=_lifespan)
+app.add_middleware(AuthMiddleware)
 
 # ── 静态文件和模板 ─────────────────────────────────────────────
 

@@ -70,10 +70,20 @@ def _get_current_user(request) -> dict | None:
 
 def render_template(name: str, context: dict, request=None) -> HTMLResponse:
     from .app import jinja_env
+    from . import auth as _auth
     if request is not None and "current_user" not in context:
         context["current_user"] = _get_current_user(request)
     user = context.get("current_user")
     if "is_admin" not in context:
         context["is_admin"] = user is not None and user.get("role") == "admin"
+    # 添加权限检查
+    if "can_view" not in context:
+        context["can_view"] = _auth.has_permission(user, "can_view")
+    if "can_execute" not in context:
+        context["can_execute"] = _auth.has_permission(user, "can_execute")
+    if "can_edit" not in context:
+        context["can_edit"] = _auth.has_permission(user, "can_edit")
+    if "can_manage_users" not in context:
+        context["can_manage_users"] = _auth.has_permission(user, "can_manage_users")
     template = jinja_env.get_template(name)
     return HTMLResponse(template.render(**context))

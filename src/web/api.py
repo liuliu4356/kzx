@@ -24,11 +24,16 @@ router = APIRouter()
 
 @router.post("/api/sites")
 async def api_save_site(
+    request: Request,
     label: str = Form(...),
     prometheus_url: str = Form(...),
     es_url: str = Form(""),
     original_label: str = Form(""),
 ):
+    from . import auth as _auth
+    user = _auth.get_current_user(request)
+    if not _auth.has_permission(user, "can_edit"):
+        raise HTTPException(403, "权限不足：需要编辑权限")
     lookup_label = original_label.strip() or label
     cs.save_site({"label": label, "prometheus_url": prometheus_url,
                   "es_url": es_url or None}, lookup_label=lookup_label)
@@ -36,7 +41,11 @@ async def api_save_site(
 
 
 @router.delete("/api/sites/{label}")
-async def api_delete_site(label: str):
+async def api_delete_site(label: str, request: Request):
+    from . import auth as _auth
+    user = _auth.get_current_user(request)
+    if not _auth.has_permission(user, "can_edit"):
+        raise HTTPException(403, "权限不足：需要编辑权限")
     ok = cs.delete_site(label)
     if not ok:
         raise HTTPException(404, "机房不存在")
@@ -377,10 +386,17 @@ async def api_test_es(
         pw = _os.environ.get(penv) if penv else None
         auth = (user, pw) if user and pw else None
         since = (datetime.now(timezone.utc) - _td(hours=time_range_hours)).isoformat()
-        body = {"size": 0, "query": {"bool": {"must": [
-            {"query_string": {"query": query_string}},
-            {"range": {"@timestamp": {"gte": since}}},
-        ]}}
+        body = {
+            "size": 0,
+            "query": {
+                "bool": {
+                    "must": [
+                        {"query_string": {"query": query_string}},
+                        {"range": {"@timestamp": {"gte": since}}},
+                    ]
+                }
+            },
+        }
         with _httpx.Client(timeout=timeout) as client:
             resp = client.post(f"{es_url.rstrip('/')}/{index}/_search",
                                 json=body, auth=auth)
@@ -593,12 +609,18 @@ async def api_test_llm(model_id: str = Form(...)):
 
 @router.post("/api/inspect")
 async def api_inspect(
+    request: Request,
     period: str = Form("instant"),
     start: str = Form(""),
     end: str = Form(""),
     skip_llm: str = Form("false"),
     fmt: str = Form("html"),
 ):
+    from . import auth as _auth
+    user = _auth.get_current_user(request)
+    if not _auth.has_permission(user, "can_execute"):
+        raise HTTPException(403, "权限不足：需要执行权限")
+
     from dotenv import load_dotenv
     load_dotenv()
     

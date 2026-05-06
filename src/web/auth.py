@@ -1,4 +1,11 @@
-"""简单的多用户认证：基于文件存储（users.json）、pbkdf2 密码哈希、服务端 session。"""
+"""简单的多用户认证：基于文件存储（users.json）、pbkdf2 密码哈希、服务端 session。
+
+角色权限说明：
+- admin: 管理员，拥有所有权限（增删改查、执行巡检、管理用户）
+- operator: 操作员，可以执行巡检、查看报告、修改配置，但不能管理用户
+- user: 普通用户，可以执行巡检、查看报告，但不能修改配置
+- viewer: 只读用户，只能查看报告和配置，不能执行任何操作
+"""
 from __future__ import annotations
 
 import hashlib
@@ -13,6 +20,38 @@ from typing import Optional
 _USERS_FILE = Path(__file__).parents[2] / "users.json"
 _SESSION_TTL_HOURS = 24 * 7  # 7 天
 _COOKIE_NAME = "sanssi_sid"
+
+# 角色权限定义
+ROLES = {
+    "admin": {
+        "label": "管理员",
+        "can_view": True,
+        "can_execute": True,
+        "can_edit": True,
+        "can_manage_users": True,
+    },
+    "operator": {
+        "label": "操作员",
+        "can_view": True,
+        "can_execute": True,
+        "can_edit": True,
+        "can_manage_users": False,
+    },
+    "user": {
+        "label": "普通用户",
+        "can_view": True,
+        "can_execute": True,
+        "can_edit": False,
+        "can_manage_users": False,
+    },
+    "viewer": {
+        "label": "只读用户",
+        "can_view": True,
+        "can_execute": False,
+        "can_edit": False,
+        "can_manage_users": False,
+    },
+}
 
 
 # ── 持久化 ────────────────────────────────────────────────────────────────
@@ -149,6 +188,36 @@ def get_current_user(request) -> Optional[dict]:
     """从请求 cookie 中取出并校验 session，返回 {username, role} 或 None。"""
     token = request.cookies.get(_COOKIE_NAME, "")
     return get_session(token)
+
+
+def has_permission(user: Optional[dict], permission: str) -> bool:
+    """检查用户是否有指定权限。
+
+    Args:
+        user: 用户信息字典，包含 username 和 role
+        permission: 权限名称，如 "can_view", "can_execute", "can_edit", "can_manage_users"
+
+    Returns:
+        bool: 是否有权限
+    """
+    if not user:
+        return False
+    role = user.get("role", "viewer")
+    role_perms = ROLES.get(role, ROLES["viewer"])
+    return role_perms.get(permission, False)
+
+
+def require_permission(permission: str):
+    """装饰器：要求用户具有指定权限。"""
+    def decorator(func):
+        async def wrapper(request, *args, **kwargs):
+            user = get_current_user(request)
+            if not has_permission(user, permission):
+                from fastapi import HTTPException
+                raise HTTPException(403, f"权限不足：需要 {permission}")
+            return await func(request, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 COOKIE_NAME = _COOKIE_NAME

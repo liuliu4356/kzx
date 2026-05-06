@@ -132,19 +132,37 @@ def inspect(config_path: str, output_dir: str | None, period: str,
 
 
 @cli.command("web")
-@click.option("--host", default="0.0.0.0", show_default=True)
-@click.option("--port", default=8000, show_default=True)
+@click.option("--host", default=None, help="监听地址（默认从 config.yaml 读取，未配置则为 127.0.0.1）")
+@click.option("--port", default=None, type=int, help="监听端口（默认从 config.yaml 读取，未配置则为 8000）")
 @click.option("--reload", is_flag=True, help="开发模式热重载")
-def web(host: str, port: int, reload: bool) -> None:
+def web(host: str | None, port: int | None, reload: bool) -> None:
     """启动 Web 可视化管理界面。"""
     setup_logging()
     try:
         import uvicorn
+        import yaml
     except ImportError:
         click.echo("请先安装 web 依赖: pip install fastapi uvicorn[standard] python-multipart", err=True)
         sys.exit(1)
-    click.echo(f"Web 界面启动: http://{host}:{port}")
-    uvicorn.run("src.web.app:app", host=host, port=port, reload=reload)
+
+    # 从 config.yaml 读取 web 配置
+    config_path = Path("config.yaml")
+    web_host = host or "0.0.0.0"
+    web_port = port or 8000
+
+    if config_path.exists():
+        try:
+            cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            web_cfg = cfg.get("web", {})
+            if host is None:
+                web_host = web_cfg.get("host", "127.0.0.1")
+            if port is None:
+                web_port = web_cfg.get("port", 8000)
+        except Exception as e:
+            click.echo(f"[WARN] 读取 config.yaml 失败: {e}，使用默认配置", err=True)
+
+    click.echo(f"Web 界面启动: http://{web_host}:{web_port}")
+    uvicorn.run("src.web.app:app", host=web_host, port=web_port, reload=reload)
 
 
 if __name__ == "__main__":

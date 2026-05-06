@@ -4,6 +4,29 @@
 
 ---
 
+## v1.9.0 (2026-05-06) - 离线部署 / 权限加固 / 内网访问
+
+### 新增功能
+
+- **`quick-start.sh` 一键启动脚本**：小白用户解压后 `sh quick-start.sh` 即可完成安装并启动 Web 服务，终端自动输出本机 IP 和内网访问地址
+- **ARM64 离线包支持**：`build_offline_package.sh` 新增 `aarch64`（麒麟+鲲鹏/飞腾）和 `both` 参数，生成对应平台的完整离线包（代码+依赖）
+- **API 权限拦截**：`api.py` 在机房保存/删除、执行巡检等关键接口新增后端权限校验（403），防止 viewer 角色绕过 UI 直接调用接口
+- **完整角色体系**：`auth.py` 新增 `ROLES` 字典（admin/operator/user/viewer）及 `has_permission()` 函数，模板上下文统一注入 `can_view/can_execute/can_edit/can_manage_users`
+- **注册页角色说明**：注册表单新增 `user`、`operator` 选项，各角色附带中文权限描述
+
+### Bug 修复
+
+- **内网无法访问**：`config.example.yaml` 和 `src/main.py` web 命令默认 host 从 `127.0.0.1` 改为 `0.0.0.0`，内网其他机器可直接访问
+- **`@app.on_event` 废弃警告**：`app.py` 启动/关闭事件改用 FastAPI 标准 `lifespan` context manager，消除 DeprecationWarning
+- **定时任务/巡检按钮权限控制**：`cron.html` / `index.html` 从 `is_admin` 改为语义更准确的 `can_edit` / `can_execute` 判断
+
+### 改进
+
+- `scripts/install_offline.sh` 重写：安装完成后自动输出本机 IP 和端口，错误提示更友好
+- 离线包产物更名为 `kzx-offline-<arch>.tar.gz`，包含完整源代码，无需额外传输项目目录
+
+---
+
 ## v1.8.0 (2026-05-05) - Bug 修复 / 权限完善 / 功能增强
 
 ### Bug 修复

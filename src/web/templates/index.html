@@ -133,7 +133,11 @@
       </select>
     </div>
     <div class="form-group" style="align-self:flex-end">
+      {% if can_execute %}
       <button class="btn btn-primary" onclick="runInspect()" id="start-btn">🚀 开始巡检</button>
+      {% else %}
+      <button class="btn btn-primary" disabled title="权限不足">🚀 开始巡检</button>
+      {% endif %}
     </div>
   </div>
 

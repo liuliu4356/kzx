@@ -19,8 +19,12 @@
       <td>
         {% if u.role == 'admin' %}
         <span class="badge badge-active">管理员</span>
+        {% elif u.role == 'operator' %}
+        <span class="badge badge-blue">操作员</span>
+        {% elif u.role == 'user' %}
+        <span class="badge badge-teal">普通用户</span>
         {% else %}
-        <span class="badge">只读</span>
+        <span class="badge">只读用户</span>
         {% endif %}
       </td>
       <td class="actions">

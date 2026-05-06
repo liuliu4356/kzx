@@ -205,6 +205,8 @@ elasticsearch:
   username_env: ES_USERNAME
   password_env: ES_PASSWORD
   kibana_url: http://localhost:5601   # 可选，配置后报告中 ES 结果自动生成 Kibana 跳转链接
+  kibana_username_env: KIBANA_USERNAME  # 可选，Kibana 认证用户名环境变量
+  kibana_password_env: KIBANA_PASSWORD  # 可选，Kibana 认证密码环境变量
   timeout_sec: 10
   queries:
 
@@ -279,6 +281,12 @@ notifiers:
     mention_all: false
   - type: feishu
     webhook_env: FEISHU_WEBHOOK
+
+# ── Web 服务器配置 ────────────────────────────────────────────────────────────
+# Web UI 监听地址和端口配置
+web:
+  host: 0.0.0.0              # 监听地址：0.0.0.0（所有网卡，内网可访问）/ 127.0.0.1（仅本机）
+  port: 8000                 # 监听端口，默认 8000
 
 # ── Web 认证配置（v1.7.0+）────────────────────────────────────────────────────
 # 首次访问 Web UI 时会引导创建管理员账号，无需手动配置 users.json

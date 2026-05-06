@@ -9,7 +9,7 @@
     使用标准 5 字段 cron 表达式（本地时间）。例：<code>0 2 * * *</code> = 每天凌晨 2 点；
     <code>0 */6 * * *</code> = 每 6 小时。需安装 <code>apscheduler</code> 依赖。
   </div>
-  {% if is_admin %}<button class="btn btn-primary" onclick="openModal('modal-job')">＋ 添加定时任务</button>{% endif %}
+  {% if can_edit %}<button class="btn btn-primary" onclick="openModal('modal-job')">＋ 添加定时任务</button>{% endif %}
 </div>
 
 {% if jobs %}
@@ -43,7 +43,7 @@
         {% endif %}
       </td>
       <td class="actions">
-        {% if is_admin %}
+        {% if can_edit %}
         <button class="btn btn-outline btn-sm" onclick='editJob({{ j | tojson }})'>编辑</button>
         <button class="btn btn-outline btn-sm" onclick="runNow('{{ j.id }}','{{ j.label }}')">立即执行</button>
         <button class="btn btn-outline btn-sm" onclick="toggleJob('{{ j.id }}', {{ 'false' if j.get('enabled', True) else 'true' }})">
