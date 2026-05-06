@@ -4,67 +4,99 @@
 {% block page_subtitle %}配置 Prometheus 采集规则和 ES 日志查询规则{% endblock %}
 {% block content %}
 
-<div class="tabs">
-  <div class="tab {% if subtab == 'prom' %}active{% endif %}" data-tab-group="q" data-tab="prom" onclick="switchTab('q','prom')">Prometheus 指标 ({{ prom_queries|length }})</div>
-  <div class="tab {% if subtab == 'es' %}active{% endif %}" data-tab-group="q" data-tab="es" onclick="switchTab('q','es')">ES 日志查询 ({{ es_queries|length }})</div>
-  <div class="tab {% if subtab == 'io' %}active{% endif %}" data-tab-group="q" data-tab="io" onclick="switchTab('q','io')">导入导出配置</div>
+<!-- 导出Modal -->
+<div class="modal-backdrop" id="modal-export" onclick="if(event.target===this)closeModal('modal-export')">
+  <div class="modal">
+    <div class="modal-title">导出配置</div>
+    <div style="padding:1rem 0">
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="exp-prom" checked> Prometheus 指标</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="exp-es" checked> ES 日志查询</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="exp-sites" checked> 机房配置</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-export')">取消</button>
+      <button class="btn btn-primary" onclick="doExport()">导出</button>
+    </div>
+  </div>
 </div>
 
-<!-- 导入导出配置 -->
-<div class="tab-pane {% if subtab == 'io' %}active{% endif %}" data-pane-group="q" data-pane="io">
-  <div style="display:flex;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
-    {% if is_admin %}
-    <button class="btn btn-outline" onclick="showBackups()">📦 恢复配置</button>
-    {% endif %}
-    <button class="btn btn-outline" onclick="doExport()">⬇ 导出配置</button>
-    <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">⬆ 导入配置</button>
-    <button class="btn btn-outline" onclick="downloadTemplate()">📄 配置模板</button>
+<!-- 导入Modal -->
+<div class="modal-backdrop" id="modal-import" onclick="if(event.target===this)closeModal('modal-import')">
+  <div class="modal">
+    <div class="modal-title">导入配置</div>
+    <div style="padding:1rem 0">
+      <input type="file" id="importFile" accept=".json" style="margin-bottom:1rem">
+      <div id="importPreview" style="font-size:.9rem;color:#666"></div>
+      <label style="display:block;margin-top:1rem"><input type="checkbox" id="imp-prom" checked> 覆盖 Prometheus 指标</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="imp-es" checked> 覆盖 ES 日志查询</label>
+      <label style="display:block;margin-bottom:.5rem"><input type="checkbox" id="imp-sites" checked> 覆盖机房配置</label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-import')">取消</button>
+      <button class="btn btn-primary" onclick="doImport()">导入</button>
+    </div>
   </div>
+</div>
 
-  <input type="file" id="importFile" accept=".json" style="display:none">
-  <div id="importResult" style="margin-bottom:.5rem;font-size:.9rem"></div>
-  <div id="importConfirmBar" style="display:none;margin-bottom:1rem">
-    <button class="btn btn-primary btn-sm" onclick="doImportFile()">✔ 确认导入</button>
-    <span style="font-size:.8rem;color:var(--text-muted);margin-left:.5rem">导入后将覆盖当前配置，不可撤销</span>
+<!-- 恢复配置 Modal -->
+<div class="modal-backdrop" id="modal-backups" onclick="if(event.target===this)closeModal('modal-backups')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">📦 配置备份恢复</div>
+    <div style="margin-bottom:1rem">
+      <button class="btn btn-primary btn-sm" onclick="createBackup()">创建新备份</button>
+    </div>
+    <div id="backup-list" style="max-height:300px;overflow-y:auto">
+      <div class="text-muted">加载中...</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('modal-backups')">关闭</button>
+    </div>
   </div>
+</div>
 
-  <details class="card" style="margin-bottom:1rem">
-    <summary style="padding:1rem;cursor:pointer;font-weight:600">📊 Prometheus 指标 ({{ prom_queries|length }} 条)</summary>
-    <div style="padding:0 1rem 1rem">
-      <label style="margin-right:1rem"><input type="checkbox" id="exp-prom" checked> 导出</label>
-      <label><input type="checkbox" id="imp-prom" checked> 导入</label>
+<!-- Prometheus 备份 Modal -->
+<div class="modal-backdrop" id="modal-prom-backups" onclick="if(event.target===this)closeModal('modal-prom-backups')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">📦 Prometheus 指标备份恢复</div>
+    <div id="prom-backup-list" style="max-height:300px;overflow-y:auto">
+      <div class="text-muted">加载中...</div>
     </div>
-  </details>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('modal-prom-backups')">关闭</button>
+    </div>
+  </div>
+</div>
 
-  <details class="card" style="margin-bottom:1rem">
-    <summary style="padding:1rem;cursor:pointer;font-weight:600">🔍 ES 日志查询 ({{ es_queries|length }} 条)</summary>
-    <div style="padding:0 1rem 1rem">
-      <label style="margin-right:1rem"><input type="checkbox" id="exp-es" checked> 导出</label>
-      <label><input type="checkbox" id="imp-es" checked> 导入</label>
+<!-- ES 备份 Modal -->
+<div class="modal-backdrop" id="modal-es-backups" onclick="if(event.target===this)closeModal('modal-es-backups')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">📦 ES 日志查询备份恢复</div>
+    <div id="es-backup-list" style="max-height:300px;overflow-y:auto">
+      <div class="text-muted">加载中...</div>
     </div>
-  </details>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('modal-es-backups')">关闭</button>
+    </div>
+  </div>
+</div>
 
-  <details class="card">
-    <summary style="padding:1rem;cursor:pointer;font-weight:600">🏢 机房配置 ({{ sites|length }} 个)</summary>
-    <div style="padding:0 1rem 1rem">
-      <label style="margin-right:1rem"><input type="checkbox" id="exp-sites" checked> 导出</label>
-      <label><input type="checkbox" id="imp-sites" checked> 导入</label>
-    </div>
-  </details>
+<div class="tabs">
+  <div class="tab active" data-tab-group="q" data-tab="prom" onclick="switchTab('q','prom')">Prometheus 指标（{{ prom_queries|length }}）</div>
+  <div class="tab" data-tab-group="q" data-tab="es" onclick="switchTab('q','es')">ES 日志查询（{{ es_queries|length }}）</div>
 </div>
 
 <!-- Prometheus 指标 -->
-<div class="tab-pane {% if subtab == 'prom' %}active{% endif %}" data-pane-group="q" data-pane="prom">
-  {% if is_admin %}
-  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">
-    <button class="btn btn-primary" onclick="openModal('modal-prom')">➕ 添加指标</button>
+<div class="tab-pane active" data-pane-group="q" data-pane="prom">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem;gap:8px">
+    {% if is_admin %}<button class="btn btn-outline" onclick="backupProm()">📦 备份</button>{% endif %}
+    {% if is_admin %}<button class="btn btn-outline" onclick="showPromBackups()">📋 恢复</button>{% endif %}
+    <button class="btn btn-primary" onclick="openModal('modal-prom')">＋ 添加指标</button>
   </div>
-  {% endif %}
   {% if prom_queries %}
   <div class="card" style="padding:0;overflow:hidden">
     <table>
       <thead><tr>
-        <th style="width:36px"><input type="checkbox" id="chk-prom-all" onchange="toggleAll('prom',this.checked)" title="全选取消"></th>
+        <th style="width:36px"><input type="checkbox" id="chk-prom-all" onchange="toggleAll('prom',this.checked)" title="全选/取消"></th>
         <th>指标名</th><th>PromQL（摘要）</th><th>阈值</th><th>异常判断</th><th>说明</th><th>操作</th>
       </tr></thead>
       <tbody>
@@ -75,7 +107,7 @@
         <td><code class="truncate">{{ q.promql[:60] }}{% if q.promql|length>60 %}…{% endif %}</code></td>
         <td>{{ q.threshold }}{{ q.unit }}</td>
         <td>{{ '低于' if q.get('anomaly_when')=='lt' else '高于' }}阈值</td>
-        <td class="text-muted truncate">{{ q.get('description','') }}</td>
+        <td class="text-muted truncate">{{ q.get('description','—') }}</td>
         <td class="actions">
           <button class="btn btn-outline btn-sm" data-type="prom" data-name="" data-promql="{{ q.promql }}" data-threshold="{{ q.threshold }}" data-unit="{{ q.unit }}" data-anomaly_when="{{ q.get('anomaly_when','gt') }}" data-description="{{ q.get('description','') }}" data-faq="{{ q.get('faq','') }}" onclick="copyFromAttr(this,'{{ q.name }}')">复制</button>
           <button class="btn btn-outline btn-sm" data-type="prom" data-name="{{ q.name }}" data-promql="{{ q.promql }}" data-threshold="{{ q.threshold }}" data-unit="{{ q.unit }}" data-anomaly_when="{{ q.get('anomaly_when','gt') }}" data-description="{{ q.get('description','') }}" data-faq="{{ q.get('faq','') }}" onclick="editFromAttr(this)">编辑</button>
@@ -92,17 +124,17 @@
 </div>
 
 <!-- ES 日志查询 -->
-<div class="tab-pane {% if subtab == 'es' %}active{% endif %}" data-pane-group="q" data-pane="es">
-  {% if is_admin %}
-  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">
-    <button class="btn btn-primary" onclick="openModal('modal-es')">➕ 添加日志查询</button>
+<div class="tab-pane" data-pane-group="q" data-pane="es">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem;gap:8px">
+    {% if is_admin %}<button class="btn btn-outline" onclick="backupES()">📦 备份</button>{% endif %}
+    {% if is_admin %}<button class="btn btn-outline" onclick="showESBackups()">📋 恢复</button>{% endif %}
+    <button class="btn btn-primary" onclick="openModal('modal-es')">＋ 添加日志查询</button>
   </div>
-  {% endif %}
   {% if es_queries %}
   <div class="card" style="padding:0;overflow:hidden">
     <table>
       <thead><tr>
-        <th style="width:36px"><input type="checkbox" id="chk-es-all" onchange="toggleAll('es',this.checked)" title="全选取消"></th>
+        <th style="width:36px"><input type="checkbox" id="chk-es-all" onchange="toggleAll('es',this.checked)" title="全选/取消"></th>
         <th>查询名</th><th>索引</th><th>关键字</th><th>时间范围</th><th>类型</th><th>操作</th>
       </tr></thead>
       <tbody>
@@ -128,8 +160,6 @@
   <div class="card empty"><div class="empty-icon">🔍</div><p>还没有配置日志查询</p></div>
   {% endif %}
 </div>
-
-{% endblock %}
 
 <!-- Modal: Prometheus -->
 <div class="modal-backdrop" id="modal-prom" onclick="if(event.target===this)closeModal('modal-prom')">
@@ -234,27 +264,23 @@
     </form>
   </div>
 </div>
-
-<!-- 恢复配置 Modal -->
-<div class="modal-backdrop" id="modal-backups" onclick="if(event.target===this)closeModal('modal-backups')">
-  <div class="modal" style="max-width:500px">
-    <div class="modal-title">📦 配置备份恢复</div>
-    <div style="margin-bottom:1rem">
-      <button class="btn btn-primary btn-sm" onclick="createBackup()">创建新备份</button>
-    </div>
-    <div id="backup-list" style="max-height:300px;overflow-y:auto">
-      <div class="text-muted">加载中...</div>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-outline" onclick="closeModal('modal-backups')">关闭</button>
-    </div>
-  </div>
-</div>
+{% endblock %}
 
 {% block scripts %}
 <script>
 const _CFG = {{ export_data_json | default('{}') | safe }};
 let importData = null;
+
+// 处理 URL 参数：?tab=es  ?action=import/export/template
+window.addEventListener('load', function(){
+  const params = new URLSearchParams(location.search);
+  const tab = params.get('tab');
+  const action = params.get('action');
+  if(tab === 'es') switchTab('q','es');
+  if(action === 'import') openModal('modal-import');
+  if(action === 'export') openModal('modal-export');
+  if(action === 'template'){ downloadTemplate(); history.replaceState({},'','/queries'); }
+});
 
 function toggleAll(type, checked){
   document.querySelectorAll('.chk-'+type).forEach(cb => cb.checked = checked);
@@ -269,6 +295,7 @@ function _downloadJSON(obj, filename){
 }
 
 async function doExport(){
+  // 直接从API获取最新配置
   try{
     const r = await fetch('/api/config/export');
     if(!r.ok){ alert('获取配置失败：' + r.status); return; }
@@ -276,13 +303,22 @@ async function doExport(){
   }catch(e){ alert('获取配置失败：' + e); return; }
   
   const out = {};
-  if(document.getElementById('exp-prom').checked && data.prometheus)
-    out.prometheus = data.prometheus;
-  if(document.getElementById('exp-es').checked && data.elasticsearch)
-    out.elasticsearch = data.elasticsearch;
+  const checkedProm = [...document.querySelectorAll('.chk-prom:checked')].map(cb=>cb.value);
+  if(document.getElementById('exp-prom').checked && data.prometheus){
+    out.prometheus = {...data.prometheus};
+    if(checkedProm.length > 0)
+      out.prometheus.queries = (data.prometheus.queries||[]).filter(q=>checkedProm.includes(q.name));
+  }
+  const checkedES = [...document.querySelectorAll('.chk-es:checked')].map(cb=>cb.value);
+  if(document.getElementById('exp-es').checked && data.elasticsearch){
+    out.elasticsearch = {...data.elasticsearch};
+    if(checkedES.length > 0)
+      out.elasticsearch.queries = (data.elasticsearch.queries||[]).filter(q=>checkedES.includes(q.name));
+  }
   if(document.getElementById('exp-sites').checked && data.sites)
     out.sites = data.sites;
   _downloadJSON(out, '巡检配置_' + new Date().toISOString().slice(0,10) + '.json');
+  closeModal('modal-export');
 }
 
 function downloadTemplate(){
@@ -305,10 +341,6 @@ function downloadTemplate(){
 }
 document.getElementById('importFile').addEventListener('change', async function(){
   const file = this.files[0];
-  const resultDiv = document.getElementById('importResult');
-  const confirmBar = document.getElementById('importConfirmBar');
-  importData = null;
-  confirmBar.style.display = 'none';
   if(!file) return;
   const text = await file.text();
   try{
@@ -317,13 +349,10 @@ document.getElementById('importFile').addEventListener('change', async function(
     if(importData.prometheus?.queries) info.push('Prometheus: ' + importData.prometheus.queries.length + '条');
     if(importData.elasticsearch?.queries) info.push('ES查询: ' + importData.elasticsearch.queries.length + '条');
     if(importData.sites) info.push('机房: ' + importData.sites.length + '个');
-    resultDiv.innerHTML = '<span style="color:green">✓ 已解析 ' + (info.join(' | ') || '空文件') + '</span>';
-    confirmBar.style.display = 'block';
-  }catch(e){
-    resultDiv.innerHTML = '<span style="color:red">✗ 文件格式错误，请确认是合法的 JSON</span>';
-  }
+    document.getElementById('importPreview').textContent = info.join(' | ') || '空文件';
+  }catch(e){ document.getElementById('importPreview').textContent = '文件格式错误'; importData = null; }
 });
-async function doImportFile(){
+async function doImport(){
   if(!importData){ alert('请先选择文件'); return; }
   const r = await fetch('/api/config/import', {
     method:'POST',
@@ -335,10 +364,8 @@ async function doImportFile(){
       sites: document.getElementById('imp-sites').checked
     })
   });
-  const d = await r.json();
-  const div = document.getElementById('importResult');
-  if(r.ok){ div.innerHTML = '<span style="color:green">✓ 导入成功</span>'; location.reload(); }
-  else{ div.innerHTML = '<span style="color:red">✗ 导入失败: '+(d.detail||r.status)+'</span>'; }
+  if(r.ok){ alert('导入成功'); location.reload(); }
+  else{ const e = await r.json(); alert('导入失败: '+(e.detail||r.status)); }
 }
 async function testProm(){
   const promql = document.getElementById('form-prom').elements.promql.value;
@@ -350,9 +377,9 @@ async function testProm(){
   const r = await fetch('/api/test/prom',{method:'POST',body:fd});
   const d = await r.json();
   if(d.ok){
-    let txt = '✅ 查询成功，共 ' + d.count + ' 个时序';
+    let txt = `✅ 查询成功，共 ${d.count} 个时序`;
     if(d.samples && d.samples.length)
-      txt += '：' + d.samples.map(s=>s.instance+'='+parseFloat(s.value).toFixed(3)).join(' | ');
+      txt += '：' + d.samples.map(s=>`${s.instance||'(无实例)'}=${parseFloat(s.value).toFixed(3)}`).join(' | ');
     res.style.cssText='display:block;background:#f0fdf4;color:#16a34a';
     res.textContent=txt;
   }else{
@@ -360,6 +387,7 @@ async function testProm(){
     res.textContent='❌ ' + d.error;
   }
 }
+
 async function testES(){
   const form = document.getElementById('form-es');
   const index = form.elements.index.value;
@@ -374,12 +402,13 @@ async function testES(){
   const d = await r.json();
   if(d.ok){
     res.style.cssText='display:block;background:#f0fdf4;color:#16a34a';
-    res.textContent='✅ 查询成功，命中 ' + d.total + ' 条（近 ' + hours + 'h）';
+    res.textContent=`✅ 查询成功，命中 ${d.total} 条（近 ${hours}h）`;
   }else{
     res.style.cssText='display:block;background:#fef2f2;color:#dc2626';
     res.textContent='❌ ' + d.error;
   }
 }
+
 function editFromAttr(btn){
   const data = {};
   for(const attr of btn.attributes){
@@ -411,38 +440,114 @@ function copyFromAttr(btn, origName){
     openModal('modal-es');
   }
 }
-async function createBackup(){
-  const type = prompt('备份类型（prometheus / elasticsearch / sites）', 'prometheus');
-  if(!type) return;
-  if(!['prometheus','elasticsearch','sites'].includes(type)){
-    alert('类型无效，请输入 prometheus、elasticsearch 或 sites'); return;
+
+async function showBackups(){
+  openModal('modal-backups');
+  const resp = await fetch('/api/backups');
+  const list = await resp.json();
+  const div = document.getElementById('backup-list');
+  if(list.length === 0){
+    div.innerHTML = '<div class="text-muted">暂无备份</div>';
+    return;
   }
-  const name = prompt('请输入备份名称（留空则自动生成时间戳）', '');
+  div.innerHTML = '<table><thead><tr><th>文件名</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
+    list.map(b => `<tr>
+      <td>${b.name}</td>
+      <td class="text-muted">${b.mtime}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="restoreBackup2('${b.name}')">恢复</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBackup2('${b.name}')">删除</button>
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+async function createBackup(){
+  const resp = await fetch('/api/backups/create', {method:'POST'});
+  const data = await resp.json();
+  if(data.ok) showAlert('备份已创建');
+  showBackups();
+}
+async function restoreBackup2(name){
+  if(!confirm('确定要恢复配置「' + name + '」吗？当前配置会备份。')) return;
+  const resp = await fetch('/api/backups/' + encodeURIComponent(name) + '/restore', {method:'POST'});
+  const data = await resp.json();
+  if(data.ok){
+    showAlert('配置已恢复');
+    location.reload();
+  }else{
+    showAlert('恢复失败','error');
+  }
+}
+async function deleteBackup2(name){
+  if(!confirm('确定要删除备份「' + name + '」吗？')) return;
+  const resp = await fetch('/api/backups/' + encodeURIComponent(name), {method:'DELETE'});
+  const data = await resp.json();
+  if(data.ok) showBackups();
+}
+async function backupProm(){
+  const name = prompt('请输入备份名称（留空则自动生成）', '');
   if(name === null) return;
   const resp = await fetch('/api/config/backup', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({type, name})
+    body: JSON.stringify({type: 'prometheus', name})
   });
   const d = await resp.json();
   alert(d.ok || d.error || '备份成功');
-  if(d.ok) showBackups();
 }
-async function showBackups(){
-  openModal('modal-backups');
+async function backupES(){
+  const name = prompt('请输入备份名称（留空则自动生成）', '');
+  if(name === null) return;
+  const resp = await fetch('/api/config/backup', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({type: 'elasticsearch', name})
+  });
+  const d = await resp.json();
+  alert(d.ok || d.error || '备份成功');
+}
+async function showPromBackups(){
+  openModal('modal-prom-backups');
   const resp = await fetch('/api/config/backups');
   const list = await resp.json();
-  const div = document.getElementById('backup-list');
-  if(list.length === 0){div.innerHTML = '<div class="text-muted">暂无可恢复的备份</div>';return;}
-  div.innerHTML = '<table style="width:100%"><thead><tr><th>名称</th><th>类型</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
-    list.map(b => '<tr><td>'+b.name+'</td><td class="text-muted">'+b.type+'</td><td class="text-muted">'+b.time+'</td><td><button class="btn btn-primary btn-sm" onclick="restoreBackup(\''+b.type+'\',\''+b.name+'\')">恢复</button></td></tr>').join('') + '</tbody></table>';
+  const list2 = list.filter(b => b.type === 'prometheus');
+  const div = document.getElementById('prom-backup-list');
+  if(list2.length === 0){
+    div.innerHTML = '<div class="text-muted">暂无可恢复的备份</div>';
+    return;
+  }
+  div.innerHTML = '<table style="width:100%"><thead><tr><th>名称</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
+    list2.map(b => `<tr><td>${b.name}</td><td class="text-muted">${b.time}</td><td><button class="btn btn-primary btn-sm" onclick="restoreProm('${b.name}')">恢复</button></td></tr>`).join('') + '</tbody></table>';
 }
-async function restoreBackup(type, name){
-  if(!confirm('确定要恢复「'+type+'」配置「'+name+'」吗？当前配置会被覆盖。')) return;
+async function restoreProm(name){
+  if(!confirm('确定要恢复Prometheus配置「'+name+'」吗？当前配置会被覆盖。')) return;
   const resp = await fetch('/api/config/restore', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({type, name})
+    body: JSON.stringify({type: 'prometheus', name})
+  });
+  const d = await resp.json();
+  alert(d.ok || d.error || '恢复成功');
+  if(d.ok) location.reload();
+}
+async function showESBackups(){
+  openModal('modal-es-backups');
+  const resp = await fetch('/api/config/backups');
+  const list = await resp.json();
+  const list2 = list.filter(b => b.type === 'elasticsearch');
+  const div = document.getElementById('es-backup-list');
+  if(list2.length === 0){
+    div.innerHTML = '<div class="text-muted">暂无可恢复的备份</div>';
+    return;
+  }
+  div.innerHTML = '<table style="width:100%"><thead><tr><th>名称</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
+    list2.map(b => `<tr><td>${b.name}</td><td class="text-muted">${b.time}</td><td><button class="btn btn-primary btn-sm" onclick="restoreES('${b.name}')">恢复</button></td></tr>`).join('') + '</tbody></table>';
+}
+async function restoreES(name){
+  if(!confirm('确定要恢复ES配置「'+name+'」吗？当前配置会被覆盖。')) return;
+  const resp = await fetch('/api/config/restore', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({type: 'elasticsearch', name})
   });
   const d = await resp.json();
   alert(d.ok || d.error || '恢复成功');

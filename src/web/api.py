@@ -161,10 +161,6 @@ async def api_restore_backup(filename: str):
 
 
 @router.delete("/api/backups/{filename}")
-async def api_delete_backup(filename: str):
-    ok = cs.delete_backup(filename)
-    return JSONResponse({"ok": ok})
-
 
 # 配置备份/恢复
 @router.post("/api/config/backup")
@@ -183,9 +179,6 @@ async def api_config_backup(request: Request):
     elif t == "elasticsearch":
         cfg = raw.get("elasticsearch", {})
         fname = f"elasticsearch_{name or datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    elif t == "sites":
-        cfg = raw.get("sites") or raw.get("datacenters", [])
-        fname = f"sites_{name or datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     else:
         return {"error": "未知类型"}
     backup_dir = Path(_PROJ_ROOT) / "config_backups"
@@ -205,8 +198,6 @@ async def api_config_backups():
             backups.append({"type": "prometheus", "name": name.replace("prometheus_", ""), "time": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")})
         elif name.startswith("elasticsearch_"):
             backups.append({"type": "elasticsearch", "name": name.replace("elasticsearch_", ""), "time": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")})
-        elif name.startswith("sites_"):
-            backups.append({"type": "sites", "name": name.replace("sites_", ""), "time": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")})
     return backups
 
 @router.post("/api/config/restore")
@@ -223,8 +214,6 @@ async def api_config_restore(request: Request):
         fname = f"prometheus_{name}.json"
     elif t == "elasticsearch":
         fname = f"elasticsearch_{name}.json"
-    elif t == "sites":
-        fname = f"sites_{name}.json"
     else:
         return {"error": "未知类型"}
     fpath = backup_dir / fname
@@ -232,11 +221,8 @@ async def api_config_restore(request: Request):
         return {"error": "备份文件不存在"}
     cfg = json.loads(fpath.read_text())
     raw = cs._load_raw()
-    if t == "sites":
-        raw["sites"] = cfg
-    else:
-        raw[t] = cfg
-    cs._save_raw(raw)
+    raw[t] = cfg
+    cs._save(raw)
     return {"ok": "配置已恢复"}
 
 # Web服务管理
