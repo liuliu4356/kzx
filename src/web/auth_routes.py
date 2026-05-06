@@ -52,6 +52,17 @@ async def do_logout(request: Request):
     return resp
 
 
+@router.get("/logout", response_class=HTMLResponse)
+async def page_logout(request: Request):
+    from fastapi.responses import RedirectResponse
+    token = request.cookies.get(_auth.COOKIE_NAME, "")
+    if token:
+        _auth.logout(token)
+    resp = RedirectResponse("/login", status_code=302)
+    resp.delete_cookie(_auth.COOKIE_NAME)
+    return resp
+
+
 @router.get("/register", response_class=HTMLResponse)
 async def page_register(request: Request):
     user = _auth.get_current_user(request)
@@ -111,7 +122,7 @@ async def page_users(request: Request):
         raise HTTPException(403, "仅管理员可访问")
     return render_template("users.html", {
         "users": _auth.list_users(),
-        "current_user": user.get("username"),
+        "current_user": user,
         "active": "settings",
     }, request)
 

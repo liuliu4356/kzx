@@ -139,6 +139,33 @@ async def api_import(request: Request):
     return JSONResponse({"ok": True})
 
 
+# ── API: Backups ─────────────────────────────────────────
+@router.get("/api/backups")
+async def api_list_backups():
+    backups = cs.list_backups()
+    return JSONResponse(backups)
+
+
+@router.post("/api/backups/create")
+async def api_create_backup():
+    filename = cs._create_backup()
+    if filename:
+        return JSONResponse({"ok": True, "filename": filename})
+    return JSONResponse({"ok": False, "error": "no config to backup"})
+
+
+@router.post("/api/backups/{filename}/restore")
+async def api_restore_backup(filename: str):
+    ok = cs.restore_backup(filename)
+    return JSONResponse({"ok": ok})
+
+
+@router.delete("/api/backups/{filename}")
+async def api_delete_backup(filename: str):
+    ok = cs.delete_backup(filename)
+    return JSONResponse({"ok": ok})
+
+
 # ── API: Datasources ─────────────────────────────────────
 
 @router.post("/api/datasources")

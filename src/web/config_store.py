@@ -8,8 +8,60 @@ from typing import Any
 import yaml
 
 CONFIG_PATH = Path("config.yaml")
+_BACKUP_DIR = Path(__file__).parents[2] / "backups"
 _HISTORY_FILE = Path(__file__).parents[2] / "cron_history.json"
 _HISTORY_MAX = 20
+
+def _create_backup() -> str | None:
+    """创建配置备份，返回备份文件名"""
+    import datetime
+    _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    raw = _load_raw()
+    if not raw:
+        return None
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = _BACKUP_DIR / f"config_{ts}.yaml"
+    backup_file.write_text(
+        yaml.dump(raw, allow_unicode=True, sort_keys=False, default_flow_style=False),
+        encoding="utf-8",
+    )
+    return str(backup_file.name)
+
+def list_backups() -> list[dict]:
+    """列出所有备份文件"""
+    if not _BACKUP_DIR.exists():
+        return []
+    backups = []
+    for f in sorted(_BACKUP_DIR.glob("config_*.yaml"), reverse=True):
+        backups.append({
+            "name": f.name,
+            "size": f.stat().st_size,
+            "mtime": datetime.datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        })
+    return backups
+
+def restore_backup(filename: str) -> bool:
+    """恢复备份"""
+    backup_file = _BACKUP_DIR / filename
+    if not backup_file.exists():
+        return False
+    try:
+        raw = yaml.safe_load(backup_file.read_text(encoding="utf-8"))
+        if raw:
+            _create_backup()  # 先备份当前配置
+            _save_raw(raw)
+            return True
+    except:
+        pass
+    return False
+
+def delete_backup(filename: str) -> bool:
+    """删除备份文件"""
+    backup_file = _BACKUP_DIR / filename
+    if backup_file.exists():
+        backup_file.unlink()
+        return True
+    return False
 
 
 def _load_raw() -> dict:

@@ -27,6 +27,9 @@ _KB_DIR = _PROJ_ROOT / "knowledge_base"
 _REPORTS_DIR = _PROJ_ROOT / "reports"
 _CONFIG_PATH = str(_PROJ_ROOT / "config.yaml")
 
+# 全局定时器
+_scheduler = None
+
 # ── 认证中间件 ─────────────────────────────────────────────────────
 
 _AUTH_WHITELIST = {"/login", "/register", "/logout"}
@@ -50,6 +53,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    global _scheduler
     _scheduler = None
     try:
         from ..scheduler import setup_scheduler

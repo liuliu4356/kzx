@@ -6,13 +6,23 @@
 <title>注册 — 三思GDB巡检平台</title>
 <link rel="stylesheet" href="/static/style.css">
 <style>
-.auth-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
-.auth-card{width:380px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:2rem 2rem 1.5rem}
+.auth-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);padding:20px}
+.auth-card{width:380px;max-width:100%;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:2rem 2rem 1.5rem}
 .auth-logo{text-align:center;margin-bottom:1.5rem}
 .auth-logo .logo-icon{font-size:2rem;margin-bottom:.4rem}
 .auth-title{font-size:1.125rem;font-weight:700;color:var(--text);margin-bottom:.25rem;text-align:center}
 .auth-sub{font-size:.85rem;color:var(--text-muted);text-align:center;margin-bottom:1.5rem}
 .auth-footer{margin-top:1rem;text-align:center;font-size:.82rem;color:var(--text-muted)}
+@media (max-width:480px){
+  .auth-card{padding:1.5rem 1.25rem 1rem;border-radius:12px}
+  .auth-logo{margin-bottom:1rem}
+  .auth-title{font-size:1rem}
+  .auth-sub{font-size:.8rem;margin-bottom:1rem}
+  .form-group{margin-bottom:.75rem}
+  .form-group label{font-size:.85rem}
+  .form-input{padding:.6rem .75rem;font-size:.9rem}
+  .btn{width:100%;margin-top:.5rem;padding:.65rem}
+}
 </style>
 </head>
 <body>

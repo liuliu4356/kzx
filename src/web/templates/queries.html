@@ -38,6 +38,22 @@
   </div>
 </div>
 
+<!-- 恢复配置 Modal -->
+<div class="modal-backdrop" id="modal-backups" onclick="if(event.target===this)closeModal('modal-backups')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">📦 配置备份恢复</div>
+    <div style="margin-bottom:1rem">
+      <button class="btn btn-primary btn-sm" onclick="createBackup()">创建新备份</button>
+    </div>
+    <div id="backup-list" style="max-height:300px;overflow-y:auto">
+      <div class="text-muted">加载中...</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('modal-backups')">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div class="tabs">
   <div class="tab active" data-tab-group="q" data-tab="prom" onclick="switchTab('q','prom')">Prometheus 指标（{{ prom_queries|length }}）</div>
   <div class="tab" data-tab-group="q" data-tab="es" onclick="switchTab('q','es')">ES 日志查询（{{ es_queries|length }}）</div>
@@ -45,7 +61,8 @@
 
 <!-- Prometheus 指标 -->
 <div class="tab-pane active" data-pane-group="q" data-pane="prom">
-  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:.75rem;gap:8px">
+    {% if is_admin %}<button class="btn btn-outline" onclick="showBackups()">📦 恢复配置</button>{% endif %}
     <button class="btn btn-primary" onclick="openModal('modal-prom')">＋ 添加指标</button>
   </div>
   {% if prom_queries %}
@@ -393,6 +410,49 @@ function copyFromAttr(btn, origName){
     fillForm('form-es', data);
     openModal('modal-es');
   }
+}
+
+async function showBackups(){
+  openModal('modal-backups');
+  const resp = await fetch('/api/backups');
+  const list = await resp.json();
+  const div = document.getElementById('backup-list');
+  if(list.length === 0){
+    div.innerHTML = '<div class="text-muted">暂无备份</div>';
+    return;
+  }
+  div.innerHTML = '<table><thead><tr><th>文件名</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
+    list.map(b => `<tr>
+      <td>${b.name}</td>
+      <td class="text-muted">${b.mtime}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="restoreBackup2('${b.name}')">恢复</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteBackup2('${b.name}')">删除</button>
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+async function createBackup(){
+  const resp = await fetch('/api/backups/create', {method:'POST'});
+  const data = await resp.json();
+  if(data.ok) showAlert('备份已创建');
+  showBackups();
+}
+async function restoreBackup2(name){
+  if(!confirm('确定要恢复配置「' + name + '」吗？当前配置会备份。')) return;
+  const resp = await fetch('/api/backups/' + encodeURIComponent(name) + '/restore', {method:'POST'});
+  const data = await resp.json();
+  if(data.ok){
+    showAlert('配置已恢复');
+    location.reload();
+  }else{
+    showAlert('恢复失败','error');
+  }
+}
+async function deleteBackup2(name){
+  if(!confirm('确定要删除备份「' + name + '」吗？')) return;
+  const resp = await fetch('/api/backups/' + encodeURIComponent(name), {method:'DELETE'});
+  const data = await resp.json();
+  if(data.ok) showBackups();
 }
 </script>
 {% endblock %}

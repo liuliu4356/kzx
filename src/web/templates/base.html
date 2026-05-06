@@ -8,8 +8,14 @@
 </head>
 <body>
 
+<!-- 移动端汉堡菜单按钮 -->
+<button class="mobile-menu-btn" onclick="toggleMobileMenu()" style="position:fixed;top:10px;left:10px;z-index:1001;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;color:var(--text)">☰</button>
+
+<!-- 遮罩层 -->
+<div class="sidebar-overlay" onclick="closeMobileMenu()"></div>
+
 <!-- ── Sidebar ─────────────────────────────────────── -->
-<nav class="sidebar">
+<nav class="sidebar" id="sidebar">
 
   <a href="/" class="logo" style="text-decoration:none">
     <div class="logo-icon">🔍</div>
@@ -52,6 +58,18 @@
         <a href="/settings" class="{% if active=='settings' and (not subtab or subtab=='datasource') %}active{% endif %}">数据源连接</a>
         <a href="/settings?tab=ai" class="{% if active=='settings' and subtab=='ai' %}active{% endif %}">AI 分析</a>
         <a href="/settings?tab=notify" class="{% if active=='settings' and subtab=='notify' %}active{% endif %}">通知</a>
+      </div>
+    </div>
+
+<!-- 账号管理 -->
+    <div class="menu-group {% if active=='users' %}open{% endif %}">
+      <div class="menu-label" onclick="toggleMenu(this)">
+        <span class="nav-icon ni-pink">👥</span> 账号管理 <span class="arrow">▾</span>
+      </div>
+      <div class="submenu">
+        <a href="/users" class="{% if active=='users' and (not subtab or subtab=='list') %}active{% endif %}">用户列表</a>
+        <a href="/register" class="{% if active=='users' and subtab=='register' %}active{% endif %}">注册新用户</a>
+        <a href="/logout">注销登录</a>
       </div>
     </div>
 
@@ -99,15 +117,7 @@
         <span>{{ current_user.username }}
           {% if current_user.role == 'admin' %}<span class="badge" style="font-size:10px;padding:1px 5px;margin-left:3px">管理员</span>{% endif %}
         </span>
-        {% if current_user.role == 'admin' %}
-        <a href="/users" style="color:var(--text-muted);margin-left:auto;font-size:11px">管理</a>
-        {% endif %}
       </div>
-      <form method="POST" action="/logout" style="margin:0">
-        <button type="submit" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:12px;padding:0;text-align:left">
-          🚪 注销登录
-        </button>
-      </form>
     </div>
     {% endif %}
     <a href="#" onclick="openModal('modal-about');return false" style="color:var(--text-muted);font-size:12.5px;margin-top:.5rem;display:block">
@@ -157,6 +167,16 @@ function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
 function toggleMenu(el){
   el.closest('.menu-group').classList.toggle('open');
+}
+
+function toggleMobileMenu(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.querySelector('.sidebar-overlay').classList.toggle('show');
+}
+
+function closeMobileMenu(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.querySelector('.sidebar-overlay').classList.remove('show');
 }
 
 function switchTab(group, name){
