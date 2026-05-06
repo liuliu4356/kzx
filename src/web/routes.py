@@ -43,13 +43,17 @@ async def page_queries(request: Request):
         "sites": sites,
     }, ensure_ascii=False)
     tab = request.query_params.get("tab", "")
-    subtab = "es" if tab == "es" else ""
+    subtab = "es" if tab == "es" else ("io" if tab == "io" else "prom")
+    user = _auth.get_current_user(request)
+    is_admin = _auth.has_permission(user, "can_edit") if user else False
     return render_template("queries.html", {
         "prom_queries": prom_queries,
         "es_queries": es_queries,
+        "sites": sites,
         "export_data_json": export_data,
         "active": "queries",
         "subtab": subtab,
+        "is_admin": is_admin,
     }, request)
 
 
@@ -154,12 +158,88 @@ _OVERVIEW_PAGES = {
         "files": [_PROJ_ROOT / "docs" / "04-开发文档" / "项目开发指南.md"],
     },
     "bugs": {
-        "title": "Bug修复并记录",
-        "files": [_PROJ_ROOT / "CHANGELOG.md", _PROJ_ROOT / "DEVLOG.md"],
+        "title": "Bug修复记录",
+        "files": [_PROJ_ROOT / "CHANGELOG.md"],
     },
     "kylin-deploy": {
         "title": "麒麟系统服务部署指南",
         "files": [_PROJ_ROOT / "docs" / "麒麟系统部署指南.md"],
+    },
+    "manual": {
+        "title": "产品手册",
+        "files": [_PROJ_ROOT / "docs" / "X项目监控系统产品手册.md"],
+    },
+    "product": {
+        "title": "项目介绍",
+        "files": [],
+        "content": """
+<h2>三思GDB巡检平台 v1.10.0</h2>
+<p>面向GoldenDB数据库分布式集群的自动化巡检工具。</p>
+
+<h3>核心功能</h3>
+<ul>
+<li>多机房Prometheus/ES数据源采集</li>
+<li>AI智能分析异常指标</li>
+<li>自动化报告生成</li>
+<li>多渠道告警通知</li>
+</ul>
+
+<h3>技术栈</h3>
+<ul>
+<li>Python 3.10+ / FastAPI</li>
+<li>Prometheus / ELK</li>
+<li>Anthropic Claude API</li>
+<li>Jinja2 模板</li>
+</ul>
+
+<h3>版本</h3>
+<p>当前版本: <strong>v1.10.0</strong> (2026-05-06)</p>
+""",
+    },
+    "notify": {
+        "title": "通知配置文档",
+        "files": [],
+        "content": """
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+<h3>📧 邮件通知配置</h3>
+<p>SMTP服务器: smtp.qq.com 或 smtp.163.com</p>
+<p>端口: 465(SSL) 或 25</p>
+<p>QQ邮箱需开启IMAP/SMTP，获取授权码作为密码</p>
+</div>
+
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+<h3>💬 钉钉通知配置</h3>
+<ol><li>打开电脑版钉钉 → 进入群设置 → 智能群助手</li>
+<li>点击添加机器人 → 选择自定义</li>
+<li>设置机器人名称 → 添加 → 复制Webhook地址</li>
+<li>格式: https://oapi.dingtalk.com/robot/send?access_token=xxx</li></ol>
+</div>
+
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+<h3>💬 企业微信通知配置</h3>
+<ol><li>打开企业微信 → 进入群设置 → 群机器人</li>
+<li>点击添加机器人 → 设置名称</li>
+<li>复制Webhook地址</li>
+<li>格式: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx</li></ol>
+</div>
+
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+<h3>🚀 飞书通知配置</h3>
+<ol><li>打开飞书 → 进入群设置 → 群机器人</li>
+<li>点击添加机器人 → 选择自定义</li>
+<li>设置名称 → 复制Webhook地址</li>
+<li>格式: https://open.feishu.cn/open-apis/bot/v2/hook/xxx</li></ol>
+</div>
+
+<div class="card" style="max-width:800px">
+<h3>🔗 配置步骤</h3>
+<ol><li>进入系统设置 → 通知</li>
+<li>找到对应的通知渠道</li>
+<li>启用开关</li>
+<li>粘贴Webhook URL</li>
+<li>点击保存</li></ol>
+</div>
+""",
     },
 }
 
@@ -175,18 +255,19 @@ async def page_overview(page: str, request: Request):
     cfg = _OVERVIEW_PAGES.get(page)
     if not cfg:
         raise HTTPException(404, "页面不存在")
-    content_raw = ""
-    for fp in cfg.get("files", []):
-        if fp.exists():
-            try:
-                content_raw = fp.read_text(encoding="utf-8")
-            except Exception:
+    content_raw = cfg.get("content", "")
+    if not content_raw:
+        for fp in cfg.get("files", []):
+            if fp.exists():
                 try:
-                    content_raw = fp.read_text(encoding="gbk")
+                    content_raw = fp.read_text(encoding="utf-8")
                 except Exception:
-                    pass
-            if content_raw:
-                break
+                    try:
+                        content_raw = fp.read_text(encoding="gbk")
+                    except Exception:
+                        pass
+                if content_raw:
+                    break
     return render_template("project_overview.html", {
         "page_title": cfg["title"],
         "content_raw": content_raw,

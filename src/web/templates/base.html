@@ -41,11 +41,9 @@
         <span class="nav-icon ni-purple">📊</span> 巡检指标 <span class="arrow">▾</span>
       </div>
       <div class="submenu">
-        <a href="/queries" class="{% if active=='queries' and subtab!='es' %}active{% endif %}">Prometheus指标配置</a>
+        <a href="/queries" class="{% if active=='queries' and subtab=='prom' %}active{% endif %}">Prometheus指标配置</a>
         <a href="/queries?tab=es" class="{% if active=='queries' and subtab=='es' %}active{% endif %}">ES日志查询配置</a>
-        <a href="/queries?action=import">导入配置</a>
-        <a href="/queries?action=export">导出配置</a>
-        <a href="/queries?action=template">配置模板下载</a>
+        <a href="/queries?tab=io" class="{% if active=='queries' and subtab=='io' %}active{% endif %}">导入导出配置</a>
       </div>
     </div>
 
@@ -110,13 +108,15 @@
       <div class="submenu">
         <a href="/overview/address" class="{% if active=='overview' and subtab=='address' %}active{% endif %}">项目地址</a>
         <a href="/overview/architecture" class="{% if active=='overview' and subtab=='architecture' %}active{% endif %}">项目架构</a>
+        <a href="/overview/product" class="{% if active=='overview' and subtab=='product' %}active{% endif %}">项目介绍</a>
         <a href="/overview/docs" class="{% if active=='overview' and subtab=='docs' %}active{% endif %}">文档索引</a>
         <a href="/overview/deploy" class="{% if active=='overview' and subtab=='deploy' %}active{% endif %}">部署文档</a>
         <a href="/overview/kylin" class="{% if active=='overview' and subtab=='kylin' %}active{% endif %}">麒麟系统部署</a>
-        <a href="/overview/physical" class="{% if active=='overview' and subtab=='physical' %}active{% endif %}">物理机安装指南</a>
-        <a href="/overview/guide" class="{% if active=='overview' and subtab=='guide' %}active{% endif %}">小白操作手册</a>
-        <a href="/overview/faq" class="{% if active=='overview' and subtab=='faq' %}active{% endif %}">常见问题 FAQ</a>
-        <a href="/overview/devguide" class="{% if active=='overview' and subtab=='devguide' %}active{% endif %}">开发者指南</a>
+        <a href="/overview/physical" class="{% if active=='overview' and subtab=='physical' %}active{% endif %}">物理机安装</a>
+        <a href="/overview/guide" class="{% if active=='overview' and subtab=='guide' %}active{% endif %}">小白手册</a>
+        <a href="/overview/manual" class="{% if active=='overview' and subtab=='manual' %}active{% endif %}">产品手册</a>
+        <a href="/overview/notify" class="{% if active=='overview' and subtab=='notify' %}active{% endif %}">通知配置</a>
+        <a href="/overview/faq" class="{% if active=='overview' and subtab=='faq' %}active{% endif %}">FAQ</a>
         <a href="/overview/bugs" class="{% if active=='overview' and subtab=='bugs' %}active{% endif %}">更新日志</a>
       </div>
     </div>
@@ -157,7 +157,7 @@
   <div class="modal">
     <div class="modal-title">👤 关于作者</div>
     <div style="line-height:1.9;color:var(--text)">
-      <p><strong style="color:var(--teal)">作者：</strong>三思</p>
+      <p><strong style="color:var(--teal)">作者：</strong>三思 (version 1.10.0)</p>
       <p><strong style="color:var(--teal)">身份：</strong>运维工程师，专注自动化巡检、监控系统建设</p>
       <p><strong style="color:var(--teal)">理念：</strong>让运维更简单，让告警更精准</p>
       <p><strong style="color:var(--teal)">技能：</strong>Python / Prometheus / ELK / Grafana</p>
@@ -176,8 +176,8 @@
 </div>
 
 <script>
-function openModal(id){ document.getElementById(id).classList.add('open'); }
-function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function openModal(id){ const el=document.getElementById(id); if(el)el.classList.add('open'); else console.error('Modal not found:',id); }
+function closeModal(id){ const el=document.getElementById(id); if(el)el.classList.remove('open'); }
 
 function toggleMenu(el){
   el.closest('.menu-group').classList.toggle('open');
@@ -227,6 +227,7 @@ async function postForm(url, formId, successMsg){
 
 function fillForm(formId, data){
   const form = document.getElementById(formId);
+  if(!form){ console.error('Form not found:',formId); return; }
   for(const [k,v] of Object.entries(data)){
     const el = form.elements[k];
     if(el) el.value = v??'';

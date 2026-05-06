@@ -4,7 +4,8 @@
 {% block page_subtitle %}管理多机房数据采集配置，每个机房对应一套独立 Prometheus 实例{% endblock %}
 {% block content %}
 <div style="display:flex;justify-content:flex-end;margin-bottom:16px;gap:8px">
-  {% if is_admin %}<button class="btn btn-outline" onclick="showBackups()">📦 恢复配置</button>{% endif %}
+  {% if is_admin %}<button class="btn btn-outline" onclick="backupSites()">📦 备份机房</button>{% endif %}
+  {% if is_admin %}<button class="btn btn-outline" onclick="showSiteBackups()">📋 恢复</button>{% endif %}
   {% if is_admin %}<button class="btn btn-primary" onclick="openModal('modal-add')">＋ 添加机房</button>{% endif %}
 </div>
 
@@ -65,6 +66,18 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="modal-site-backups" onclick="if(event.target===this)closeModal('modal-site-backups')">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title">📦 机房配置备份恢复</div>
+    <div id="site-backup-list" style="max-height:300px;overflow-y:auto">
+      <div class="text-muted">加载中...</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline" onclick="closeModal('modal-site-backups')">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-backups" onclick="if(event.target===this)closeModal('modal-backups')">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📦 配置备份恢复</div>
@@ -122,6 +135,43 @@ function copySite(label){
 }
 function saveSite(){
   postForm('/api/sites','form-site','机房已保存');
+}
+function backupSites(){
+  var name = prompt('请输入备份名称（留空则自动生成）', '');
+  if(name === null) return;
+  fetch('/api/config/backup',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:'sites',name:name})
+  }).then(function(r){return r.json();}).then(function(d){
+    alert(d.ok || d.error || '备份成功');
+  });
+}
+function showSiteBackups(){
+  openModal('modal-site-backups');
+  fetch('/api/config/backups').then(function(r){return r.json();}).then(function(list){
+    var list2 = list.filter(function(b){return b.type === 'sites';});
+    var div = document.getElementById('site-backup-list');
+    if(list2.length === 0){div.innerHTML = '<div class="text-muted">暂无可恢复的备份</div>';return;}
+    var html = '<table style="width:100%"><thead><tr><th>名称</th><th>时间</th><th>操作</th></tr></thead><tbody>';
+    list2.forEach(function(b){
+      html += '<tr><td>'+b.name+'</td><td class="text-muted">'+b.time+'</td><td>';
+      html += '<button class="btn btn-primary btn-sm" onclick="restoreSite(\''+b.name+'\')">恢复</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    div.innerHTML = html;
+  });
+}
+function restoreSite(name){
+  if(!confirm('确定要恢复机房配置「'+name+'」吗？当前配置会被覆盖。')) return;
+  fetch('/api/config/restore',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:'sites',name:name})
+  }).then(function(r){return r.json();}).then(function(d){
+    alert(d.ok || d.error || '恢复成功');
+    if(d.ok) location.reload();
+  });
 }
 function showBackups(){
   openModal('modal-backups');
