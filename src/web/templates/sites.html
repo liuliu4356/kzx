@@ -8,7 +8,6 @@
   {% if is_admin %}<button class="btn btn-primary" onclick="openModal('modal-add')">＋ 添加机房</button>{% endif %}
 </div>
 
-
 {% if sites %}
 <div class="card">
   <table>
@@ -21,8 +20,8 @@
       <td class="text-muted">{{ s.es_url or '（使用全局）' }}</td>
       <td class="actions">
         {% if is_admin %}
-        <button class="btn btn-outline btn-sm" onclick="editSite({{ s | tojson }})">编辑</button>
-        <button class="btn btn-outline btn-sm" onclick="copySite({{ s | tojson }})">复制</button>
+        <button class="btn btn-outline btn-sm" onclick="editSite('{{ s.label }}')">编辑</button>
+        <button class="btn btn-outline btn-sm" onclick="copySite('{{ s.label }}')">复制</button>
         <button class="btn btn-danger btn-sm" onclick="del('/api/sites/' + encodeURIComponent('{{ s.label }}'),'确定删除机房「{{ s.label }}」？',true)">删除</button>
         {% else %}
         <span class="text-muted" style="font-size:.82rem">只读</span>
@@ -40,7 +39,6 @@
 </div>
 {% endif %}
 
-<!-- 添加/编辑 Modal -->
 <div class="modal-backdrop" id="modal-add" onclick="if(event.target===this)closeModal('modal-add')">
   <div class="modal">
     <div class="modal-title" id="modal-title">添加机房</div>
@@ -67,7 +65,6 @@
   </div>
 </div>
 
-<!-- 恢复配置 Modal -->
 <div class="modal-backdrop" id="modal-backups" onclick="if(event.target===this)closeModal('modal-backups')">
   <div class="modal" style="max-width:500px">
     <div class="modal-title">📦 配置备份恢复</div>
@@ -86,70 +83,79 @@
 
 {% block scripts %}
 <script>
-function _openSiteModal(title, s, editMode){
+var sitesData = {{ sites | tojson }};
+function _openModal(title, editMode){
   document.getElementById('modal-title').textContent = title;
   document.getElementById('form-site').reset();
   document.getElementById('site-original-label').value = '';
-  const labelEl = document.getElementById('site-label');
+  var labelEl = document.getElementById('site-label');
   labelEl.readOnly = false;
-  if(s) fillForm('form-site', s);
-  if(editMode && s){
+  if(editMode){
     labelEl.readOnly = true;
-    document.getElementById('site-original-label').value = s.label;
+    document.getElementById('site-original-label').value = labelEl.value;
   }
   openModal('modal-add');
 }
-function editSite(s){
-  _openSiteModal('编辑机房：' + s.label, s, true);
+function editSite(label){
+  var s = sitesData.find(function(x){return x.label === label;});
+  if(s){
+    fillForm('form-site', s);
+    document.getElementById('site-original-label').value = s.label;
+    document.getElementById('site-label').readOnly = true;
+    document.getElementById('modal-title').textContent = '编辑机房：' + s.label;
+    openModal('modal-add');
+  }
 }
-function copySite(s){
-  const copy = Object.assign({}, s, {label: s.label + '_copy'});
-  _openSiteModal('复制机房：' + s.label, copy, false);
+function copySite(label){
+  var s = sitesData.find(function(x){return x.label === label;});
+  if(s){
+    document.getElementById('form-site').reset();
+    document.getElementById('site-original-label').value = '';
+    document.getElementById('site-label').value = s.label + '_copy';
+    document.getElementById('site-label').readOnly = false;
+    document.getElementById('site-label').focus();
+    if(s.prometheus_url) document.querySelector('input[name="prometheus_url"]').value = s.prometheus_url;
+    if(s.es_url) document.querySelector('input[name="es_url"]').value = s.es_url;
+    document.getElementById('modal-title').textContent = '复制机房：' + s.label;
+    openModal('modal-add');
+  }
 }
-async function saveSite(){
-  await postForm('/api/sites','form-site','机房已保存');
+function saveSite(){
+  postForm('/api/sites','form-site','机房已保存');
 }
-async function showBackups(){
+function showBackups(){
   openModal('modal-backups');
-  const resp = await fetch('/api/backups');
-  const list = await resp.json();
-  const div = document.getElementById('backup-list');
-  if(list.length === 0){
-    div.innerHTML = '<div class="text-muted">暂无备份</div>';
-    return;
-  }
-  div.innerHTML = '<table><thead><tr><th>文件名</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
-    list.map(b => `<tr>
-      <td>${b.name}</td>
-      <td class="text-muted">${b.mtime}</td>
-      <td>
-        <button class="btn btn-outline btn-sm" onclick="restoreBackup('${b.name}')">恢复</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteBackup('${b.name}')">删除</button>
-      </td>
-    </tr>`).join('') + '</tbody></table>';
+  fetch('/api/backups').then(function(r){return r.json();}).then(function(list){
+    var div = document.getElementById('backup-list');
+    if(list.length === 0){div.innerHTML = '<div class="text-muted">暂无备份</div>';return;}
+    var html = '<table><thead><tr><th>文件名</th><th>时间</th><th>操作</th></tr></thead><tbody>';
+    list.forEach(function(b){
+      html += '<tr><td>'+b.name+'</td><td class="text-muted">'+b.mtime+'</td><td>';
+      html += '<button class="btn btn-outline btn-sm" onclick="restoreBackup(\''+b.name+'\')">恢复</button> ';
+      html += '<button class="btn btn-danger btn-sm" onclick="deleteBackup(\''+b.name+'\')">删除</button>';
+      html += '</td></tr>';
+    });
+    html += '</tbody></table>';
+    div.innerHTML = html;
+  });
 }
-async function createBackup(){
-  const resp = await fetch('/api/backups/create', {method:'POST'});
-  const data = await resp.json();
-  if(data.ok) showAlert('备份已创建');
-  showBackups();
+function createBackup(){
+  fetch('/api/backups/create',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(d.ok) alert('备份已创建');
+    showBackups();
+  });
 }
-async function restoreBackup(name){
-  if(!confirm('确定要恢复配置「' + name + '」吗？当前配置会备份。')) return;
-  const resp = await fetch('/api/backups/' + encodeURIComponent(name) + '/restore', {method:'POST'});
-  const data = await resp.json();
-  if(data.ok){
-    showAlert('配置已恢复');
-    location.reload();
-  }else{
-    showAlert('恢复失败','error');
-  }
+function restoreBackup(name){
+  if(!confirm('确定要恢复配置「'+name+'」吗？当前配置会备份。')) return;
+  fetch('/api/backups/'+encodeURIComponent(name)+'/restore',{method:'POST'}).then(function(r){return r.json();}).then(function(d){
+    if(d.ok){alert('配置已恢复');location.reload();}else{alert('恢复失败');}
+  });
 }
-async function deleteBackup(name){
-  if(!confirm('确定要删除备份「' + name + '」吗？')) return;
-  const resp = await fetch('/api/backups/' + encodeURIComponent(name), {method:'DELETE'});
-  const data = await resp.json();
-  if(data.ok) showBackups();
+function deleteBackup(name){
+  if(!confirm('确定要删除备份「'+name+'」吗？')) return;
+  fetch('/api/backups/'+encodeURIComponent(name),{method:'DELETE'}).then(function(r){return r.json();}).then(function(d){
+    if(d.ok) showBackups();
+  });
 }
 </script>
 {% endblock %}

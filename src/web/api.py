@@ -11,7 +11,7 @@ from fastapi import APIRouter, Form, HTTPException, Request, UploadFile, File
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 
 from . import config_store as cs
-from .helpers import render_template, _list_reports, _list_kb_files, _get_current_user
+from .helpers import render_template, _list_reports, _list_kb_files, _get_current_user, _PROJ_ROOT
 from ..logging_setup import get_log_path, tail_log
 
 # 创建路由器
@@ -161,6 +161,106 @@ async def api_restore_backup(filename: str):
 
 
 @router.delete("/api/backups/{filename}")
+
+# 配置备份/恢复
+@router.post("/api/config/backup")
+async def api_config_backup(request: Request):
+    from . import auth as _auth
+    user = _auth.get_current_user(request)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    data = await request.json()
+    t = data.get("type", "prometheus")
+    name = data.get("name", "")
+    raw = cs._load_raw()
+    if t == "prometheus":
+        cfg = raw.get("prometheus", {})
+        fname = f"prometheus_{name or datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    elif t == "elasticsearch":
+        cfg = raw.get("elasticsearch", {})
+        fname = f"elasticsearch_{name or datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    else:
+        return {"error": "未知类型"}
+    backup_dir = Path(_PROJ_ROOT) / "config_backups"
+    backup_dir.mkdir(exist_ok=True)
+    (backup_dir / fname).write_text(json.dumps(cfg, ensure_ascii=False, indent=2))
+    return {"ok": f"已备份到 {fname}"}
+
+@router.get("/api/config/backups")
+async def api_config_backups():
+    backup_dir = Path(_PROJ_ROOT) / "config_backups"
+    if not backup_dir.exists():
+        return []
+    backups = []
+    for f in sorted(backup_dir.glob("*.json")):
+        name = f.stem
+        if name.startswith("prometheus_"):
+            backups.append({"type": "prometheus", "name": name.replace("prometheus_", ""), "time": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")})
+        elif name.startswith("elasticsearch_"):
+            backups.append({"type": "elasticsearch", "name": name.replace("elasticsearch_", ""), "time": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")})
+    return backups
+
+@router.post("/api/config/restore")
+async def api_config_restore(request: Request):
+    from . import auth as _auth
+    user = _auth.get_current_user(request)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    data = await request.json()
+    t = data.get("type", "prometheus")
+    name = data.get("name", "")
+    backup_dir = Path(_PROJ_ROOT) / "config_backups"
+    if t == "prometheus":
+        fname = f"prometheus_{name}.json"
+    elif t == "elasticsearch":
+        fname = f"elasticsearch_{name}.json"
+    else:
+        return {"error": "未知类型"}
+    fpath = backup_dir / fname
+    if not fpath.exists():
+        return {"error": "备份文件不存在"}
+    cfg = json.loads(fpath.read_text())
+    raw = cs._load_raw()
+    raw[t] = cfg
+    cs._save(raw)
+    return {"ok": "配置已恢复"}
+
+# Web服务管理
+@router.get("/api/service/status")
+async def api_service_status(request: Request):
+    from . import auth as _auth
+    user = _auth.get_current_user(request)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    import subprocess
+    try:
+        out = subprocess.check_output("netstat -tlnp | grep python", shell=True, timeout=5).decode()
+        for line in out.split("\n"):
+            if ":800" in line:
+                parts = line.split()
+                return {"running": True, "port": 8000, "info": line}
+        return {"running": False}
+    except:
+        return {"running": False}
+
+@router.post("/api/service/{action}")
+async def api_service_action(action: str, request: Request):
+    from . import auth as _auth
+    user = _auth.get_current_user(request)
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    import subprocess
+    if action == "stop":
+        subprocess.run("pkill -f 'src.main'", shell=True, timeout=10)
+        return {"ok": "服务已停止"}
+    elif action == "restart":
+        subprocess.run("pkill -f 'src.main'", shell=True, timeout=10)
+        subprocess.Popen("cd /opt/kzx && nohup /opt/kzx/venv/bin/python -m src.main web --host 0.0.0.0 --port 8000 > /var/log/kzx.log 2>&1 &", shell=True)
+        return {"ok": "服务已重启"}
+    elif action == "start":
+        subprocess.Popen("cd /opt/kzx && nohup /opt/kzx/venv/bin/python -m src.main web --host 0.0.0.0 --port 8000 > /var/log/kzx.log 2>&1 &", shell=True)
+        return {"ok": "服务已启动"}
+    return {"error": "未知操作"}
 async def api_delete_backup(filename: str):
     ok = cs.delete_backup(filename)
     return JSONResponse({"ok": ok})

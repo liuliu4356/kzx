@@ -3,25 +3,24 @@
 {% block page_title %}系统设置{% endblock %}
 {% block page_subtitle %}配置数据源连接、AI 分析模型和通知渠道{% endblock %}
 {% block content %}
-
-<div class="tabs">
-  <div class="tab active" data-tab-group="s" data-tab="conn" onclick="switchTab('s','conn')">数据源连接</div>
-  <div class="tab" data-tab-group="s" data-tab="llm" onclick="switchTab('s','llm')">AI 分析</div>
-  <div class="tab" data-tab-group="s" data-tab="notify" onclick="switchTab('s','notify')">通知</div>
-  <div class="tab" data-tab-group="s" data-tab="tablemon" onclick="switchTab('s','tablemon')">表规模监控</div>
-  <div class="tab" data-tab-group="s" data-tab="syslog" onclick="switchTab('s','syslog')">系统日志</div>
-</div>
-
 {% set datasources = raw.get('datasources', []) %}
 {% set llm = raw.get('llm', {}) %}
 {% set llm_models = llm.get('models', []) %}
 {% set active_llm = llm.get('active_model', '') %}
 {% set notifiers_list = raw.get('notifiers', []) %}
 {% set notifiers = {} %}
+{% set tm = raw.get('table_monitor', {}) %}
 {% for n in notifiers_list %}{% set _ = notifiers.update({n.get('type',''): n}) %}{% endfor %}
 
-<!-- ===== 数据源连接 ===== -->
-<div class="tab-pane active" data-pane-group="s" data-pane="conn">
+<div class="tabs">
+  <div class="tab {% if not subtab or subtab=='conn' %}active{% endif %}" data-tab-group="s" data-tab="conn" onclick="location.href='/settings'">数据源连接</div>
+  <div class="tab {% if subtab=='ai' %}active{% endif %}" data-tab-group="s" data-tab="ai" onclick="location.href='/settings?tab=ai'">AI 分析</div>
+  <div class="tab {% if subtab=='notify' %}active{% endif %}" data-tab-group="s" data-tab="notify" onclick="location.href='/settings?tab=notify'">通知</div>
+  <div class="tab {% if subtab=='syslog' %}active{% endif %}" data-tab-group="s" data-tab="syslog" onclick="location.href='/settings?tab=syslog'">系统日志</div>
+</div>
+
+{% if not subtab or subtab=='conn' %}
+<div class="tab-pane active">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
     <span style="font-weight:600;font-size:.9375rem">已配置数据源（{{ datasources|length }} 个）</span>
     <div style="display:flex;gap:.5rem">
@@ -53,12 +52,10 @@
           {% endif %}
         </td>
         <td><code class="truncate">{{ ds.url }}</code></td>
-        <td class="text-muted">{{ ds.get('timeout_sec', 10) }}s</td>
+        <td class="text-muted">{{ ds.timeout_sec }}s</td>
         <td class="actions">
-          {% if is_admin %}
-          <button class="btn btn-outline btn-sm" onclick='editDs({{ ds | tojson }})'>编辑</button>
-          <button class="btn btn-danger btn-sm" onclick="del('/api/datasources/{{ ds.id }}','删除数据源「{{ ds.name }}」？',true)">删除</button>
-          {% endif %}
+          <button class="btn btn-outline btn-sm" onclick="editDs({{ ds | tojson }})">编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="del('/api/datasources/{{ ds.id }}','确定删除数据源「{{ ds.name }}」？',true)">删除</button>
         </td>
       </tr>
       {% endfor %}
@@ -72,11 +69,10 @@
   </div>
   {% endif %}
 </div>
+{% endif %}
 
-<!-- ===== AI 分析 ===== -->
-<div class="tab-pane" data-pane-group="s" data-pane="llm">
-
-  <!-- 大模型配置 -->
+{% if subtab=='ai' %}
+<div class="tab-pane active">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
     <span style="font-weight:600;font-size:.9375rem">大模型配置（{{ llm_models|length }} 个）</span>
     {% if is_admin %}<button class="btn btn-primary btn-sm" onclick="openModal('modal-llm')">＋ 添加大模型</button>{% endif %}
@@ -86,28 +82,19 @@
   <div class="card" style="padding:0;overflow:hidden;margin-bottom:1.25rem">
     <table>
       <thead><tr>
-        <th>名称</th><th>提供商</th><th>模型</th><th>API Base</th><th>状态</th><th>操作</th>
+        <th>模型</th><th>API Key</th><th>状态</th><th>操作</th>
       </tr></thead>
       <tbody>
       {% for m in llm_models %}
       <tr>
-        <td><strong>{{ m.name }}</strong></td>
-        <td class="text-muted">{{ m.get('provider','anthropic') }}</td>
-        <td><code>{{ m.get('model','') }}</code></td>
-        <td class="text-muted truncate">{{ m.get('api_base','') or '默认' }}</td>
-        <td>
-          {% if m.id == active_llm %}
-          <span class="badge badge-active">当前使用</span>
-          {% elif is_admin %}
-          <button class="btn btn-outline btn-sm" onclick="setActiveLlm('{{ m.id }}')">设为默认</button>
-          {% endif %}
-        </td>
+        <td><strong>{{ m.model }}</strong></td>
+        <td><code class="truncate text-muted">{{ m.api_key[:20] }}****</code></td>
+        <td>{% if m.model == active_llm %}<span class="badge badge-success">已启用</span>{% else %}<span class="text-muted">未启用</span>{% endif %}</td>
         <td class="actions">
-          {% if is_admin %}
-          <button class="btn btn-outline btn-sm" onclick='editLlm({{ m | tojson }})'>编辑</button>
-          <button class="btn btn-outline btn-sm" onclick="testLlm('{{ m.id }}','{{ m.name }}')">测试连接</button>
-          <button class="btn btn-danger btn-sm" onclick="del('/api/llm/models/{{ m.id }}','删除模型「{{ m.name }}」？',true)">删除</button>
+          {% if m.model != active_llm %}
+          <button class="btn btn-outline btn-sm" onclick="fetch('/api/llm/models/'+{{ m.id }}+'/activate',{method:'POST'}).then(()=>location.reload())">启用</button>
           {% endif %}
+          <button class="btn btn-danger btn-sm" onclick="del('/api/llm/models/{{ m.id }}','确定删除模型「{{ m.model }}」？',true)">删除</button>
         </td>
       </tr>
       {% endfor %}
@@ -115,66 +102,32 @@
     </table>
   </div>
   {% else %}
-  <div class="card empty" style="margin-bottom:1.25rem">
-    <div class="empty-icon">🤖</div>
-    <p>还没有配置大模型。<br><span class="text-muted">如未配置大模型，巡检时将自动使用知识库文档进行分析。</span></p>
-  </div>
-  {% endif %}
-
-  <!-- 知识库 -->
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
-    <span style="font-weight:600;font-size:.9375rem">知识库文档</span>
-    <div style="display:flex;gap:.5rem">
-      {% if is_admin %}
-      <button class="btn btn-outline btn-sm" onclick="document.getElementById('kb-upload-input').click()">⬆ 上传文档</button>
-      <input type="file" id="kb-upload-input" accept=".xlsx,.xls,.pdf,.md" multiple style="display:none" onchange="uploadKb(this)">
-      {% endif %}
-    </div>
-  </div>
-  <div class="alert alert-info" style="margin-bottom:.75rem">
-    支持格式：<strong>Excel (.xlsx/.xls)</strong>、<strong>PDF (.pdf)</strong>、<strong>Markdown (.md)</strong>。
-    巡检遇到日志类报错时，若未配置大模型则自动检索知识库。
-  </div>
-
-  {% if kb_files %}
-  <div class="kb-list">
-    {% for f in kb_files %}
-    <div class="kb-item">
-      <div class="kb-icon">
-        {% if f.name.endswith('.pdf') %}📕
-        {% elif f.name.endswith('.md') %}📝
-        {% else %}📊{% endif %}
-      </div>
-      <div class="kb-info">
-        <div class="kb-name">{{ f.name }}</div>
-        <div class="kb-meta">{{ f.size_kb }} KB · {{ f.mtime }}</div>
-      </div>
-      <div class="kb-actions">
-        <a class="btn btn-outline btn-sm" href="/api/knowledge-base/download/{{ f.name }}">下载</a>
-        {% if is_admin %}
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('kb-update-{{ loop.index }}').click()">更新</button>
-        <input type="file" id="kb-update-{{ loop.index }}" accept=".xlsx,.xls,.pdf,.md" style="display:none" onchange="updateKb(this,'{{ f.name }}')">
-        <button class="btn btn-danger btn-sm" onclick="del('/api/knowledge-base/{{ f.name }}','确定删除知识库文档「{{ f.name }}」？',true)">删除</button>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
   <div class="card empty">
-    <div class="empty-icon">📚</div>
-    <p>知识库为空。<br><span class="text-muted">上传 Excel/PDF/Markdown 文档后可在巡检中作为 AI 分析参考。</span></p>
+    <div class="empty-icon">🤖</div>
+    <p>还没有配置大模型。<br><span class="text-muted">点击「添加大模型」配置 AI 分析模型。</span></p>
   </div>
   {% endif %}
-</div>
 
-<!-- ===== 通知 ===== -->
-<div class="tab-pane" data-pane-group="s" data-pane="notify">
+  <div class="notifier-section">
+    <div class="notifier-header">🔑 API Key 环境变量</div>
+    <div class="notifier-body">
+      <div class="form-group">
+        <label>变量名</label>
+        <input name="key_env" value="{{ llm.get('key_env','ANTHROPIC_API_KEY') }}">
+        <div class="form-hint">环境变量名称，从环境变量读取 API Key</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveLlmKey()">保存</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if subtab=='notify' %}
+<div class="tab-pane active">
   {% set email = notifiers.get('email', {}) %}
   {% set wechat = notifiers.get('wechat_work', {}) %}
   {% set feishu = notifiers.get('feishu', {}) %}
 
-  <!-- 邮件通知 -->
   <div class="notifier-section">
     <div class="notifier-header">
       📧 邮件通知
@@ -187,7 +140,7 @@
         <div class="form-row">
           <div class="form-group">
             <label>SMTP 服务器</label>
-            <input name="smtp_host" value="{{ email.get('smtp_host','') }}" placeholder="smtp.example.com">
+            <input name="smtp_host" value="{{ email.get('smtp_host','') }}" placeholder="smtp.qq.com">
           </div>
           <div class="form-group">
             <label>端口</label>
@@ -196,39 +149,47 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>用户名环境变量</label>
-            <input name="username_env" value="{{ email.get('username_env','SMTP_USER') }}" placeholder="SMTP_USER">
+            <label>账号</label>
+            <input name="smtp_user" value="{{ email.get('smtp_user','') }}">
           </div>
           <div class="form-group">
-            <label>密码环境变量</label>
-            <input name="password_env" value="{{ email.get('password_env','SMTP_PASS') }}" placeholder="SMTP_PASS">
+            <label>密码/授权码</label>
+            <input name="smtp_pass" type="password" value="{{ email.get('smtp_pass','') }}">
           </div>
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>发件人地址</label>
-            <input name="sender" value="{{ email.get('sender','') }}" placeholder="noreply@example.com">
+            <label>发件人</label>
+            <input name="from_addr" value="{{ email.get('from_addr','') }}">
           </div>
           <div class="form-group">
-            <label>发件人名称</label>
-            <input name="sender_name" value="{{ email.get('sender_name','GDB巡检系统') }}">
+            <label>收件人</label>
+            <input name="to_addrs" value="{{ email.get('to_addrs','') }}">
           </div>
-        </div>
-        <div class="form-group">
-          <label>收件人（逗号分隔）</label>
-          <input name="recipients" value="{{ email.get('recipients',[])|join(',') }}" placeholder="admin@example.com,ops@example.com">
-        </div>
-        <div class="form-group">
-          <label style="display:flex;align-items:center;gap:.4rem">
-            <input type="checkbox" name="smtp_ssl" {% if email.get('smtp_ssl', True) %}checked{% endif %}> 启用 SSL/TLS
-          </label>
         </div>
         {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('email','form-email')">保存</button>{% endif %}
       </form>
     </div>
   </div>
 
-  <!-- 企业微信 -->
+  <div class="notifier-section">
+    <div class="notifier-header">
+      💬 钉钉通知
+      <label style="margin-left:auto;font-weight:400;font-size:.875rem">
+        <input type="checkbox" id="dingtalk-enabled" {% if notifiers.get('dingtalk',{}).get('enabled') %}checked{% endif %}> 启用
+      </label>
+    </div>
+    <div class="notifier-body">
+      <form id="form-dingtalk">
+        <div class="form-group">
+          <label>Webhook URL</label>
+          <input name="webhook_url" value="{{ notifiers.get('dingtalk',{}).get('webhook_url','') }}" style="width:100%">
+        </div>
+        {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('dingtalk','form-dingtalk')">保存</button>{% endif %}
+      </form>
+    </div>
+  </div>
+
   <div class="notifier-section">
     <div class="notifier-header">
       💬 企业微信通知
@@ -240,19 +201,14 @@
       <form id="form-wechat">
         <div class="form-group">
           <label>Webhook URL</label>
-          <input name="webhook_url" value="{{ wechat.get('webhook_url','') }}"
-            placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxx">
-        </div>
-        <div class="form-group">
-          <label>@成员（userid，逗号分隔，留空则@所有人）</label>
-          <input name="mentioned_list" value="{{ wechat.get('mentioned_list',[])|join(',') }}" placeholder="zhangsan,lisi">
+          <input name="webhook_url" value="{{ wechat.get('webhook_url','') }}" style="width:100%">
+          <div class="form-hint">企业微信群机器人Webhook地址</div>
         </div>
         {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('wechat_work','form-wechat')">保存</button>{% endif %}
       </form>
     </div>
   </div>
 
-  <!-- 飞书 -->
   <div class="notifier-section">
     <div class="notifier-header">
       🚀 飞书通知
@@ -264,251 +220,91 @@
       <form id="form-feishu">
         <div class="form-group">
           <label>Webhook URL</label>
-          <input name="webhook_url" value="{{ feishu.get('webhook_url','') }}"
-            placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx">
-        </div>
-        <div class="form-group">
-          <label>签名密钥（可选）</label>
-          <input name="secret_env" value="{{ feishu.get('secret_env','') }}" placeholder="FEISHU_SECRET（环境变量名）">
+          <input name="webhook_url" value="{{ feishu.get('webhook_url','') }}" style="width:100%">
+          <div class="form-hint">飞书群机器人Webhook地址</div>
         </div>
         {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveNotifier('feishu','form-feishu')">保存</button>{% endif %}
       </form>
     </div>
   </div>
-</div>
 
-<!-- ===== 表规模监控 ===== -->
-{% set tm = raw.get('table_monitor', {}) %}
-{% set tm_queries = tm.get('queries', []) %}
-<div class="tab-pane" data-pane-group="s" data-pane="tablemon">
-  <div class="alert alert-info" style="margin-bottom:1rem">
-    监控指定数据库表的磁盘占用和行数，超阈值时在巡检报告中标注异常。需要数据库只读账号。
-  </div>
-
-  <!-- MySQL 连接配置 -->
-  <div class="notifier-section" style="margin-bottom:1.25rem">
-    <div class="notifier-header">
-      🗄️ MySQL 连接配置
-      <label style="margin-left:auto;font-weight:400;font-size:.875rem">
-        <input type="checkbox" id="tm-enabled" {% if tm.get('enabled') %}checked{% endif %}> 启用表规模监控
-      </label>
-    </div>
-    <div class="notifier-body">
-      <form id="form-tm">
-        <div class="form-row">
-          <div class="form-group">
-            <label>主机 / IP</label>
-            <input name="host" value="{{ tm.get('host','') }}" placeholder="10.0.0.1">
-          </div>
-          <div class="form-group">
-            <label>端口</label>
-            <input name="port" type="number" value="{{ tm.get('port', 3306) }}">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>用户名</label>
-            <input name="user" value="{{ tm.get('user','') }}" placeholder="monitor_user">
-          </div>
-          <div class="form-group">
-            <label>密码环境变量</label>
-            <input name="password_env" value="{{ tm.get('password_env','GDB_MONITOR_DB_PASS') }}" placeholder="GDB_MONITOR_DB_PASS">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>超时（秒）</label>
-          <input name="timeout_sec" type="number" value="{{ tm.get('timeout_sec', 10) }}" style="width:100px">
-        </div>
-        <div style="display:flex;gap:.5rem">
-          {% if is_admin %}<button type="button" class="btn btn-primary btn-sm" onclick="saveTmSettings()">保存连接配置</button>{% endif %}
-          <button type="button" class="btn btn-outline btn-sm" onclick="testTmConn()">测试连接</button>
-        </div>
-        <div id="tm-test-result" style="margin-top:.5rem;font-size:.875rem"></div>
-      </form>
+  <div class="notifier-section">
+    <div class="notifier-header" style="font-size:13px;color:var(--text-muted)">
+      📖 <a href="/overview/notify" target="_blank">如何配置通知？查看文档 →</a>
     </div>
   </div>
-
-  <!-- 监控表列表 -->
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
-    <span style="font-weight:600;font-size:.9375rem">监控表（{{ tm_queries|length }} 个）</span>
-    {% if is_admin %}<button class="btn btn-primary btn-sm" onclick="openModal('modal-tq')">＋ 添加监控表</button>{% endif %}
-  </div>
-
-  {% if tm_queries %}
-  <div class="card" style="padding:0;overflow:hidden">
-    <table>
-      <thead><tr>
-        <th>名称</th><th>库.表</th><th>大小阈值</th><th>行数阈值</th><th>操作</th>
-      </tr></thead>
-      <tbody>
-      {% for q in tm_queries %}
-      <tr>
-        <td><strong>{{ q.name }}</strong><br><span class="text-muted" style="font-size:.8rem">{{ q.get('description','') }}</span></td>
-        <td><code>{{ q.database }}.{{ q.table }}</code></td>
-        <td>{{ q.get('size_threshold_gb', 100) }} GB</td>
-        <td>{{ q.get('row_threshold', 0) or '—' }}</td>
-        <td class="actions">
-          {% if is_admin %}
-          <button class="btn btn-outline btn-sm" onclick='editTq({{ q | tojson }})'>编辑</button>
-          <button class="btn btn-danger btn-sm" onclick="del('/api/table-monitor/queries/{{ q.name }}','删除监控表「{{ q.name }}」？',true)">删除</button>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% else %}
-  <div class="card empty">
-    <div class="empty-icon">📊</div>
-    <p>还没有配置监控表。<br><span class="text-muted">点击「添加监控表」配置需要监控的大表。</span></p>
-  </div>
-  {% endif %}
 </div>
+{% endif %}
 
-<!-- Modal: 添加/编辑监控表 -->
-<div class="modal-backdrop" id="modal-tq" onclick="if(event.target===this)closeModal('modal-tq')">
-  <div class="modal">
-    <div class="modal-title" id="tq-modal-title">添加监控表</div>
-    <form id="form-tq">
-      <div class="form-row">
-        <div class="form-group">
-          <label>名称 <span style="color:red">*</span></label>
-          <input name="name" id="tq-name" required placeholder="如：order_main">
-        </div>
-        <div class="form-group">
-          <label>数据库名 <span style="color:red">*</span></label>
-          <input name="database" required placeholder="如：gdb_production">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>表名 <span style="color:red">*</span></label>
-        <input name="table" required placeholder="如：order_items">
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>大小阈值（GB）</label>
-          <input name="size_threshold_gb" type="number" step="0.1" value="100">
-        </div>
-        <div class="form-group">
-          <label>行数阈值（0=不检查）</label>
-          <input name="row_threshold" type="number" value="0">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>描述</label>
-        <input name="description" placeholder="如：订单明细表">
-      </div>
-      <div class="form-group">
-        <label>FAQ（异常时展示的排查建议）</label>
-        <textarea name="faq" rows="3" style="width:100%;resize:vertical" placeholder="1. 检查是否有大量未归档数据&#10;2. 联系 DBA 执行分区裁剪"></textarea>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline" onclick="closeModal('modal-tq')">取消</button>
-        <button type="button" class="btn btn-primary" onclick="saveTq()">保存</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- ===== 系统日志 ===== -->
-<div class="tab-pane" data-pane-group="s" data-pane="syslog">
+{% if subtab=='syslog' %}
+<div class="tab-pane active">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
     <div>
       <span style="font-weight:600;font-size:.9375rem">运行日志</span>
-      <span class="text-muted" id="log-path-label" style="font-size:.82rem;margin-left:.75rem"></span>
     </div>
     <button class="btn btn-outline btn-sm" onclick="refreshLogs()">🔄 刷新</button>
   </div>
-  <div class="card" style="padding:0;overflow:hidden">
-    <pre id="log-content" style="margin:0;padding:1rem;font-size:.78rem;line-height:1.55;max-height:520px;overflow-y:auto;background:var(--bg);color:var(--text);white-space:pre-wrap;word-break:break-all">（点击"刷新"加载最近日志）</pre>
+  <div class="card" style="padding:0">
+    <pre id="log-content" style="margin:0;padding:1rem;max-height:60vh;overflow:auto;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all">加载中...</pre>
   </div>
 </div>
+{% endif %}
 
-<!-- Modal: 添加/编辑数据源 -->
 <div class="modal-backdrop" id="modal-ds" onclick="if(event.target===this)closeModal('modal-ds')">
   <div class="modal">
-    <div class="modal-title" id="ds-modal-title">添加数据源</div>
+    <div class="modal-title" id="modal-ds-title">添加数据源</div>
     <form id="form-ds">
       <input type="hidden" name="id" id="ds-id">
-      <div class="form-row">
-        <div class="form-group">
-          <label>数据源名称 <span style="color:red">*</span></label>
-          <input name="name" required placeholder="如：主机房-Prometheus">
-        </div>
-        <div class="form-group">
-          <label>类型 <span style="color:red">*</span></label>
-          <select name="type" id="ds-type-select" onchange="toggleDsFields()">
-            <option value="prometheus">Prometheus</option>
-            <option value="elasticsearch">Elasticsearch</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label>名称 <span style="color:red">*</span></label>
+        <input name="name" required placeholder="如：机房A-Prometheus">
+      </div>
+      <div class="form-group">
+        <label>类型 <span style="color:red">*</span></label>
+        <select name="type" id="ds-type-select" onchange="toggleDsFields()">
+          <option value="prometheus">Prometheus</option>
+          <option value="elasticsearch">Elasticsearch</option>
+        </select>
       </div>
       <div class="form-group">
         <label>地址 <span style="color:red">*</span></label>
         <input name="url" required placeholder="http://10.0.0.1:9090">
+        <div class="form-hint">Prometheus: http://ip:9090, ES: http://ip:9200</div>
+      </div>
+      <div class="form-group" id="ds-es-fields" style="display:none">
+        <label>用户名（可选）</label>
+        <input name="es_user" placeholder="elastic">
+      </div>
+      <div class="form-group" id="ds-es-fields2" style="display:none">
+        <label>密码（可选）</label>
+        <input name="es_pass" type="password">
       </div>
       <div class="form-group">
         <label>超时（秒）</label>
         <input name="timeout_sec" type="number" value="10">
       </div>
-      <!-- ES-only fields -->
-      <div id="ds-es-fields" style="display:none">
-        <div class="form-row">
-          <div class="form-group">
-            <label>用户名环境变量</label>
-            <input name="username_env" placeholder="ES_USER">
-          </div>
-          <div class="form-group">
-            <label>密码环境变量</label>
-            <input name="password_env" placeholder="ES_PASS">
-          </div>
-        </div>
-      </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeModal('modal-ds')">取消</button>
-        <button type="button" class="btn btn-primary" onclick="saveDatasource()">保存</button>
+        <button type="button" class="btn btn-primary" onclick="saveDs()">保存</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- Modal: 添加/编辑大模型 -->
 <div class="modal-backdrop" id="modal-llm" onclick="if(event.target===this)closeModal('modal-llm')">
   <div class="modal">
-    <div class="modal-title" id="llm-modal-title">添加大模型</div>
+    <div class="modal-title">添加大模型</div>
     <form id="form-llm">
-      <input type="hidden" name="id" id="llm-id">
-      <div class="form-row">
-        <div class="form-group">
-          <label>显示名称 <span style="color:red">*</span></label>
-          <input name="name" required placeholder="如：Claude Sonnet、内网Qwen">
-        </div>
-        <div class="form-group">
-          <label>提供商</label>
-          <select name="provider">
-            <option value="anthropic">Anthropic (Claude)</option>
-            <option value="openai_compatible">OpenAI 兼容接口（内网/其他）</option>
-            <option value="openai">OpenAI</option>
-          </select>
-        </div>
+      <div class="form-group">
+        <label>模型</label>
+        <select name="model">
+          <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (推荐)</option>
+          <option value="claude-haiku-3-20240307">Claude Haiku 3</option>
+        </select>
       </div>
       <div class="form-group">
-        <label>模型名称 <span style="color:red">*</span></label>
-        <input name="model" required placeholder="如：claude-sonnet-4-6、qwen-72b">
-      </div>
-      <div class="form-group">
-        <label>API Key 环境变量</label>
-        <input name="api_key_env" placeholder="ANTHROPIC_API_KEY">
-      </div>
-      <div class="form-group">
-        <label>API Base URL（内网模型填写，公有云留空）</label>
-        <input name="api_base" placeholder="http://10.0.0.1:8080/v1">
-        <div class="form-hint">OpenAI 兼容接口的基础地址，Anthropic 官方模型无需填写</div>
-      </div>
-      <div class="form-group">
-        <label>最大 Token 数</label>
-        <input name="max_tokens" type="number" value="2048">
+        <label>API Key</label>
+        <input name="api_key" required placeholder="sk-ant-...">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline" onclick="closeModal('modal-llm')">取消</button>
@@ -517,181 +313,61 @@
     </form>
   </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-// ── 数据源 ──────────────────────────────────────────────────────────────────
 function toggleDsFields(){
   const t = document.getElementById('ds-type-select').value;
   document.getElementById('ds-es-fields').style.display = t === 'elasticsearch' ? '' : 'none';
+  document.getElementById('ds-es-fields2').style.display = t === 'elasticsearch' ? '' : 'none';
 }
 function editDs(ds){
-  document.getElementById('ds-modal-title').textContent = '编辑数据源：' + ds.name;
-  fillForm('form-ds', ds);
-  document.getElementById('ds-id').value = ds.id || '';
-  document.getElementById('ds-type-select').value = ds.type || 'prometheus';
+  document.getElementById('modal-ds-title').textContent = '编辑数据源';
+  document.getElementById('ds-id').value = ds.id;
+  document.querySelector('#form-ds [name="name"]').value = ds.name;
+  document.querySelector('#form-ds [name="type"]').value = ds.type;
+  document.querySelector('#form-ds [name="url"]').value = ds.url;
+  document.querySelector('#form-ds [name="timeout_sec"]').value = ds.timeout_sec;
   toggleDsFields();
   openModal('modal-ds');
 }
-async function saveDatasource(){
-  const form = document.getElementById('form-ds');
-  const fd = new FormData(form);
-  if(!fd.get('id')) fd.set('id', 'ds_' + Date.now());
-  const r = await fetch('/api/datasources', {method:'POST', body: fd});
-  if(r.ok){ alert('数据源已保存'); closeModal('modal-ds'); location.reload(); }
-  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
+function saveDs(){
+  postForm('/api/datasources','form-ds','数据源已保存');
 }
 function exportDatasources(){
-  fetch('/api/datasources/export').then(r=>r.json()).then(data=>{
-    _downloadJSON(data, '数据源配置_' + new Date().toISOString().slice(0,10) + '.json');
+  fetch('/api/datasources/export').then(r=>r.blob()).then(b=>{
+    const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='datasources.json';a.click();
   });
 }
 function importDatasources(input){
-  const file = input.files[0];
-  if(!file) return;
-  file.text().then(text=>{
-    try{
-      const data = JSON.parse(text);
-      fetch('/api/datasources/import', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)
-      }).then(r=>{ if(r.ok){ alert('导入成功'); location.reload(); } else alert('导入失败'); });
-    }catch(e){ alert('文件格式错误'); }
-  });
-  input.value = '';
+  const f=input.files[0];if(!f) return;
+  const r=new FileReader();r.onload=e=>{
+    fetch('/api/datasources/import',{method:'POST',body:JSON.stringify({data:JSON.parse(e.target.result)})}).then(r=>r.json()).then(d=>{
+      alert(d.ok||d.error);location.reload();
+    });
+  };r.readAsText(f);
 }
 function downloadDsTemplate(){
-  _downloadJSON([
-    {id:"prom-main", name:"主机房-Prometheus", type:"prometheus", url:"http://10.0.0.1:9090", timeout_sec:10},
-    {id:"es-main", name:"主机房-ES", type:"elasticsearch", url:"http://10.0.0.1:9200", username_env:"ES_USER", password_env:"ES_PASS", timeout_sec:10}
-  ], '数据源配置模板.json');
+  const t=[{name:"机房A",type:"prometheus",url:"http://10.0.0.1:9090",timeout_sec:10}];
+  const b=new Blob([JSON.stringify(t,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='datasources_template.json';a.click();
 }
-function _downloadJSON(obj, filename){
-  const blob = new Blob([JSON.stringify(obj, null, 2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = filename; a.click();
+function saveLlmModel(){
+  postForm('/api/llm/models','form-llm','大模型已添加');
 }
-
-// ── 大模型 ──────────────────────────────────────────────────────────────────
-async function testLlm(id, name){
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = '测试中…';
-  try {
-    const fd = new FormData(); fd.set('model_id', id);
-    const r = await fetch('/api/test/llm', {method:'POST', body: fd});
-    const data = await r.json();
-    alert(data.ok ? `✅ ${name} 连接成功\n${data.msg}` : `❌ ${name} 连接失败\n${data.error}`);
-  } catch(e) {
-    alert('❌ 网络错误: ' + e);
-  } finally {
-    btn.disabled = false; btn.textContent = '测试连接';
-  }
+function saveLlmKey(){
+  const fd=new FormData();fd.append('key_env',document.querySelector('#form-llm [name="key_env"]').value);
+  fetch('/api/llm/key_env',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{alert(d.ok||d.error);});
 }
-function editLlm(m){
-  document.getElementById('llm-modal-title').textContent = '编辑模型：' + m.name;
-  fillForm('form-llm', m);
-  document.getElementById('llm-id').value = m.id || '';
-  openModal('modal-llm');
+function saveNotifier(type,formId){
+  postForm('/api/notifiers',formId,type+'通知已保存');
 }
-async function saveLlmModel(){
-  const form = document.getElementById('form-llm');
-  const fd = new FormData(form);
-  if(!fd.get('id')) fd.set('id', 'llm_' + Date.now());
-  const r = await fetch('/api/llm/models', {method:'POST', body: fd});
-  if(r.ok){ alert('模型已保存'); closeModal('modal-llm'); location.reload(); }
-  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
+function refreshLogs(){
+  fetch('/api/logs?lines=200').then(r=>r.text()).then(t=>{
+    document.getElementById('log-content').textContent = t || '暂无日志';
+  });
 }
-async function setActiveLlm(id){
-  const r = await fetch('/api/llm/models/' + id + '/activate', {method:'POST'});
-  if(r.ok) location.reload();
-  else alert('操作失败');
-}
-
-// ── 知识库 ──────────────────────────────────────────────────────────────────
-async function uploadKb(input){
-  const files = input.files;
-  if(!files.length) return;
-  const fd = new FormData();
-  for(const f of files) fd.append('files', f);
-  const r = await fetch('/api/knowledge-base/upload', {method:'POST', body: fd});
-  if(r.ok){ alert('上传成功'); location.reload(); }
-  else alert('上传失败');
-  input.value = '';
-}
-async function updateKb(input, filename){
-  const file = input.files[0];
-  if(!file) return;
-  const fd = new FormData(); fd.append('file', file); fd.append('replace', filename);
-  const r = await fetch('/api/knowledge-base/update', {method:'POST', body: fd});
-  if(r.ok){ alert('更新成功'); location.reload(); }
-  else alert('更新失败');
-  input.value = '';
-}
-
-// ── 表规模监控 ──────────────────────────────────────────────────────────────
-async function saveTmSettings(){
-  const form = document.getElementById('form-tm');
-  const fd = new FormData(form);
-  fd.set('enabled', document.getElementById('tm-enabled').checked ? 'true' : 'false');
-  const r = await fetch('/api/table-monitor/settings', {method:'POST', body: fd});
-  if(r.ok) alert('连接配置已保存');
-  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
-}
-async function testTmConn(){
-  const form = document.getElementById('form-tm');
-  const fd = new FormData(form);
-  const res = document.getElementById('tm-test-result');
-  res.textContent = '测试中...';
-  const r = await fetch('/api/test/table', {method:'POST', body: fd});
-  const data = await r.json();
-  res.textContent = data.ok ? '✅ ' + data.msg : '❌ ' + data.error;
-  res.style.color = data.ok ? 'var(--green)' : 'var(--red)';
-}
-function editTq(q){
-  document.getElementById('tq-modal-title').textContent = '编辑监控表：' + q.name;
-  fillForm('form-tq', q);
-  document.getElementById('tq-name').readOnly = true;
-  openModal('modal-tq');
-}
-async function saveTq(){
-  const form = document.getElementById('form-tq');
-  const fd = new FormData(form);
-  const r = await fetch('/api/table-monitor/queries', {method:'POST', body: fd});
-  if(r.ok){ alert('监控表已保存'); closeModal('modal-tq'); location.reload(); }
-  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
-}
-document.getElementById('modal-tq').addEventListener('click', function(e){
-  if(e.target === this){ closeModal('modal-tq'); document.getElementById('tq-name').readOnly = false; }
-});
-
-// ── 系统日志 ─────────────────────────────────────────────────────────────────
-async function refreshLogs(){
-  const pre = document.getElementById('log-content');
-  const label = document.getElementById('log-path-label');
-  pre.textContent = '加载中…';
-  try {
-    const r = await fetch('/api/logs?lines=200');
-    const data = await r.json();
-    if(data.log_path) label.textContent = data.log_path;
-    pre.textContent = data.lines.length ? data.lines.join('\n') : '（日志文件为空）';
-    pre.scrollTop = pre.scrollHeight;
-  } catch(e) {
-    pre.textContent = '加载失败: ' + e;
-  }
-}
-
-// ── 通知 ────────────────────────────────────────────────────────────────────
-async function saveNotifier(type, formId){
-  const form = document.getElementById(formId);
-  const fd = new FormData(form);
-  fd.set('type', type);
-  // 设置启用状态
-  const chk = document.getElementById(type === 'wechat_work' ? 'wechat-enabled' : (type === 'feishu' ? 'feishu-enabled' : 'email-enabled'));
-  fd.set('enabled', chk && chk.checked ? 'true' : 'false');
-  const r = await fetch('/api/notifiers', {method:'POST', body: fd});
-  if(r.ok) alert('通知配置已保存');
-  else { const e = await r.json(); alert('失败: ' + (e.detail || r.status)); }
-}
+if(location.search.includes('syslog')) refreshLogs();
 </script>
 {% endblock %}

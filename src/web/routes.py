@@ -57,7 +57,8 @@ async def page_queries(request: Request):
 async def page_settings(request: Request):
     raw = cs.get_all()
     kb_files = _list_kb_files()
-    return render_template("settings.html", {"raw": raw, "kb_files": kb_files, "active": "settings"}, request)
+    tab = request.query_params.get("tab", "conn")
+    return render_template("settings.html", {"raw": raw, "kb_files": kb_files, "active": "settings", "subtab": tab}, request)
 
 
 @router.get("/reports", response_class=HTMLResponse)
@@ -118,6 +119,7 @@ _OVERVIEW_PAGES = {
             {"url": "/overview/kylin-deploy", "label": "麒麟系统部署指南", "desc": "国产麒麟系统服务部署", "external": False},
             {"url": "/overview/guide", "label": "小白操作手册", "desc": "零基础快速入门", "external": False},
             {"url": "/overview/bugs", "label": "Bug修复记录", "desc": "版本更新日志", "external": False},
+            {"url": "/overview/notify", "label": "通知配置文档", "desc": "钉钉/飞书/企业微信配置", "external": False},
         ],
     },
     "deploy": {

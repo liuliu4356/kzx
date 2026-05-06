@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}通知配置文档 — 三思GDB巡检平台{% endblock %}
+{% block page_title %}通知配置文档{% endblock %}
+{% block page_subtitle %}如何配置各种通知渠道{% endblock %}
+{% block content %}
+
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+  <h3 style="margin-bottom:1rem">📧 邮件通知配置</h3>
+  <div class="form-group">
+    <label>SMTP 服务器</label>
+    <p class="text-muted">如 smtp.qq.com、smtp.163.com</p>
+  </div>
+  <div class="form-group">
+    <label>端口</label>
+    <p class="text-muted">465（SSL）或 25</p>
+  </div>
+  <div class="form-group">
+    <label>发件人</label>
+    <p class="text-muted">your_email@qq.com</p>
+  </div>
+  <div class="form-group">
+    <label>收件人</label>
+    <p class="text-muted">多个用逗号分隔，如：test@example.com,admin@example.com</p>
+  </div>
+  <div class="alert alert-info">
+    <strong>提示：</strong>QQ邮箱需开启IMAP/SMTP，获取授权码作为密码
+  </div>
+</div>
+
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+  <h3 style="margin-bottom:1rem">💬 钉钉通知配置</h3>
+  <ol style="line-height:2">
+    <li>打开电脑版钉钉 → 进入群设置 → 智能群助手</li>
+    <li>点击「添加机器人」→ 选择「自定义」</li>
+    <li>设置机器人名称 → 添加 → 复制Webhook地址</li>
+    <li>格式：<code>https://oapi.dingtalk.com/robot/send?access_token=xxx</code></li>
+  </ol>
+</div>
+
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+  <h3 style="margin-bottom:1rem">💬 企业微信通知配置</h3>
+  <ol style="line-height:2">
+    <li>打开企业微信 → 进入群设置 → 群机器人</li>
+    <li>点击「添加机器人」→ 设置名称</li>
+    <li>复制Webhook地址</li>
+    <li>格式：<code>https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx</code></li>
+  </ol>
+</div>
+
+<div class="card" style="max-width:800px;margin-bottom:1.5rem">
+  <h3 style="margin-bottom:1rem">🚀 飞书通知配置</h3>
+  <ol style="line-height:2">
+    <li>打开飞书 → 进入群设置 → 群机器人</li>
+    <li>点击「添加机器人」→ 选择「自定义」</li>
+    <li>设置名称 → 复制Webhook地址</li>
+    <li>格式：<code>https://open.feishu.cn/open-apis/bot/v2/hook/xxx</code></li>
+  </ol>
+</div>
+
+<div class="card" style="max-width:800px">
+  <h3 style="margin-bottom:1rem">🔗 获取Webhook后的配置步骤</h3>
+  <ol style="line-height:2">
+    <li>进入系统设置 → 通知</li>
+    <li>找到对应的通知渠道（钉钉/企业微信/飞书）</li>
+    <li>启用开关</li>
+    <li>粘贴Webhook URL</li>
+    <li>点击保存</li>
+    <li>点击「测试通知」验证配置</li>
+  </ol>
+</div>
+
+{% endblock %}

@@ -67,7 +67,7 @@ async def page_logout(request: Request):
 async def page_register(request: Request):
     user = _auth.get_current_user(request)
     first_user = _auth.user_count() == 0
-    if not first_user and (user is None or user.get("role") != "admin"):
+    if not first_user and user is None:
         return RedirectResponse("/login", status_code=302)
     return render_template("register.html", {
         "error": "",
@@ -85,7 +85,7 @@ async def do_register(
 ):
     user = _auth.get_current_user(request)
     first_user = _auth.user_count() == 0
-    if not first_user and (user is None or user.get("role") != "admin"):
+    if not first_user and user is None:
         return RedirectResponse("/login", status_code=302)
     
     if password != password2:
